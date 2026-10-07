@@ -501,6 +501,22 @@ pub enum VoicevoxOnExistingVoiceModelId {
     VOICEVOX_ON_EXISTING_VOICE_MODEL_ID_SKIP = 2,
 }
 
+/// 疑問文の語尾の音高の上げ方。
+///
+/// \orig-impl{VoicevoxInterrogativeUpspeakStyle}
+#[repr(i32)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[allow(
+    non_camel_case_types,
+    reason = "実際に公開するC APIとの差異をできるだけ少なくするため"
+)]
+pub enum VoicevoxInterrogativeUpspeakStyle {
+    /// 最後のモーラの後ろに、音高を上げた母音のモーラを0.15秒追加する。VOICEVOX ENGINEと同じふるまい
+    VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA = 0,
+    /// モーラを追加せず、最後のモーラの母音を0.06秒伸ばし、その母音の中で音高をなめらかに上げる。デフォルトのふるまい
+    VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE = 1,
+}
+
 /// ハードウェアアクセラレーションモードを設定する設定値。
 ///
 /// \orig-impl{VoicevoxAccelerationMode}
@@ -617,6 +633,8 @@ pub unsafe extern "C" fn voicevox_audio_query_create_from_accent_phrases(
 pub struct VoicevoxAudioQueryFrameLengthOptions {
     /// [`AccentPhrase::is_interrogative`](../rust_api/voicevox_core/struct.AccentPhrase.html#structfield.is_interrogative)を認識するかどうか
     enable_interrogative_upspeak: bool,
+    /// 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+    interrogative_upspeak_style: VoicevoxInterrogativeUpspeakStyle,
 }
 
 // SAFETY: voicevox_core_c_apiを構成するライブラリの中に、これと同名のシンボルは存在しない
@@ -644,9 +662,12 @@ pub extern "C" fn voicevox_make_default_audio_query_frame_length_options()
 ///     - [`AudioQuery::accent_phrases`]の要素ごとに
 ///         - [`AccentPhrase::moras`]の要素ごとに
 ///             - [`Mora::consonant_length`]
-///             - [`Mora::vowel_length`]
+///             - [`Mora::vowel_length`]（ただし後述の条件で ::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE
+///               のとき、最後のモーラは`0.06`秒足したもの）
 ///         - ::VoicevoxAudioQueryFrameLengthOptions::enable_interrogative_upspeak
-///           かつ[`AccentPhrase::is_interrogative`]かつ`moras`の最後の[`Mora::pitch`]が`0.0`以外のとき、`0.15`秒
+///           かつ[`AccentPhrase::is_interrogative`]かつ`moras`の最後の[`Mora::pitch`]が`0.0`以外で、
+///           ::VoicevoxAudioQueryFrameLengthOptions::interrogative_upspeak_style が
+///           ::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA のとき、`0.15`秒
 ///         - [`AccentPhrase::pause_mora`]の`Mora::consonant_length`（通常はない）
 ///         - `AccentPhrase::pause_mora`の`Mora::vowel_length`
 ///     - [`AudioQuery::post_phoneme_length`]
@@ -796,6 +817,7 @@ pub unsafe extern "C" fn voicevox_audio_query_frame_length(
         let Saturating(frame_length) = AudioQuery::from_json_without_validation(audio_query_json)?
             .frame_length()
             .enable_interrogative_upspeak(options.enable_interrogative_upspeak)
+            .interrogative_upspeak_style(options.interrogative_upspeak_style.into())
             .calculate();
         // SAFETY: The safety contract must be upheld by the caller.
         unsafe { output_frame_length.write_unaligned(frame_length) };
@@ -1827,6 +1849,8 @@ pub unsafe extern "C" fn voicevox_synthesizer_replace_mora_pitch(
 pub struct VoicevoxSynthesisOptions {
     /// 疑問文の調整を有効にする
     enable_interrogative_upspeak: bool,
+    /// 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+    interrogative_upspeak_style: VoicevoxInterrogativeUpspeakStyle,
 }
 
 // SAFETY: voicevox_core_c_apiを構成するライブラリの中に、これと同名のシンボルは存在しない
@@ -1877,11 +1901,13 @@ pub unsafe extern "C" fn voicevox_synthesizer_synthesis(
         let audio_query = ValidateJson::validate_json(audio_query_json)?;
         let VoicevoxSynthesisOptions {
             enable_interrogative_upspeak,
+            interrogative_upspeak_style,
         } = options;
         let wav = synthesizer
             .body()
             .synthesis(&audio_query, StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak)
+            .interrogative_upspeak_style(interrogative_upspeak_style.into())
             .perform()?;
         // SAFETY: The safety contract must be upheld by the caller.
         unsafe { U8_SLICE_OWNER.own_and_lend(wav, output_wav, output_wav_length) };
@@ -1923,11 +1949,13 @@ pub unsafe extern "C" fn voicevox_synthesizer_create_audio_feature(
         let audio_query = ValidateJson::validate_json(audio_query_json)?;
         let VoicevoxSynthesisOptions {
             enable_interrogative_upspeak,
+            interrogative_upspeak_style,
         } = options;
         let audio_feature = synthesizer
             .body()
             .create_audio_feature(&audio_query, StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak)
+            .interrogative_upspeak_style(interrogative_upspeak_style.into())
             .perform()?;
         let audio_feature = <VoicevoxAudioFeature as CApiObject>::new(audio_feature);
         // SAFETY: The safety contract must be upheld by the caller.
@@ -2029,6 +2057,8 @@ pub extern "C" fn voicevox_audio_feature_delete(audio_feature: *mut VoicevoxAudi
 pub struct VoicevoxTtsOptions {
     /// 疑問文の調整を有効にする
     enable_interrogative_upspeak: bool,
+    /// 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+    interrogative_upspeak_style: VoicevoxInterrogativeUpspeakStyle,
 }
 
 // SAFETY: voicevox_core_c_apiを構成するライブラリの中に、これと同名のシンボルは存在しない
@@ -2078,11 +2108,13 @@ pub unsafe extern "C" fn voicevox_synthesizer_tts_from_kana(
         let kana = ensure_utf8(unsafe { CStr::from_ptr(kana) })?;
         let VoicevoxTtsOptions {
             enable_interrogative_upspeak,
+            interrogative_upspeak_style,
         } = options;
         let output = synthesizer
             .body()
             .tts_from_kana(kana, StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak)
+            .interrogative_upspeak_style(interrogative_upspeak_style.into())
             .perform()?;
         // SAFETY: The safety contract must be upheld by the caller.
         unsafe { U8_SLICE_OWNER.own_and_lend(output, output_wav, output_wav_length) };
@@ -2131,11 +2163,13 @@ pub unsafe extern "C" fn voicevox_synthesizer_tts(
         let text = ensure_utf8(unsafe { CStr::from_ptr(text) })?;
         let VoicevoxTtsOptions {
             enable_interrogative_upspeak,
+            interrogative_upspeak_style,
         } = options;
         let output = synthesizer
             .body()
             .tts(text, StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak)
+            .interrogative_upspeak_style(interrogative_upspeak_style.into())
             .perform()?;
         // SAFETY: The safety contract must be upheld by the caller.
         unsafe { U8_SLICE_OWNER.own_and_lend(output, output_wav, output_wav_length) };

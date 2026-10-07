@@ -10,6 +10,7 @@ if TYPE_CHECKING:
         AudioQuery,
         CharacterMeta,
         FrameAudioQuery,
+        InterrogativeUpspeakStyle,
         OnExistingVoiceModelId,
         Score,
         StyleId,
@@ -447,6 +448,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> AudioFeature:
         """
         :class:`AudioQuery` から中間表現である :class:`AudioFeature` を生成する。
@@ -459,6 +461,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------
@@ -494,6 +498,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
         cancellable: bool = False,
     ) -> bytes:
         """
@@ -510,6 +515,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
         cancellable
             音声モデルの実行をキャンセル可能にするかどうか。このオプションを有効にすると、負荷がかかっている状況下でハングする可能性がある。そのためデフォルトでは無効化されている。
             `VOICEVOX/voicevox_core#968 <https://github.com/VOICEVOX/voicevox_core/issues/968>`_ を参照。
@@ -525,6 +532,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> SynthesisStream:
         """
         :class:`AudioQuery` からストリーミングで音声合成する。
@@ -537,6 +545,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------
@@ -549,6 +559,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
         cancellable: bool = False,
     ) -> bytes:
         """
@@ -565,6 +576,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
         cancellable
             音声モデルの実行をキャンセル可能にするかどうか。このオプションを有効にすると、負荷がかかっている状況下でハングする可能性がある。そのためデフォルトでは無効化されている。
             `VOICEVOX/voicevox_core#968 <https://github.com/VOICEVOX/voicevox_core/issues/968>`_ を参照。
@@ -576,6 +589,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
         cancellable: bool = False,
     ) -> bytes:
         """
@@ -597,6 +611,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
         cancellable
             音声モデルの実行をキャンセル可能にするかどうか。このオプションを有効にすると、負荷がかかっている状況下でハングする可能性がある。そのためデフォルトでは無効化されている。
             `VOICEVOX/voicevox_core#968 <https://github.com/VOICEVOX/voicevox_core/issues/968>`_ を参照。

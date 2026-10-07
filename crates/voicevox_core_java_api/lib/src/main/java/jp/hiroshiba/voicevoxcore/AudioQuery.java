@@ -103,12 +103,18 @@ public final class AudioQuery {
    *               <li>{@link AccentPhrase#moras}の要素ごとに
    *                   <ul>
    *                     <li>{@link Mora#consonantLength}
-   *                     <li>{@link Mora#vowelLength}
+   *                     <li>{@link Mora#vowelLength}（ただし後述の条件で{@link
+   *                         FrameLengthConfigurator#interrogativeUpspeakStyle
+   *                         interrogativeUpspeakStyle}が{@link
+   *                         InterrogativeUpspeakStyle#GLIDE}のとき、最後のモーラは{@code 0.06}秒足したもの）
    *                   </ul>
    *               <li>{@link FrameLengthConfigurator#interrogativeUpspeak(boolean)
    *                   interrogativeUpspeak}が{@code true}かつ{@link
    *                   AccentPhrase#isInterrogative}かつ{@link AccentPhrase#moras}の最後の{@link
-   *                   Mora#pitch}が{@code 0.0}以外のとき、{@code 0.15}秒
+   *                   Mora#pitch}が{@code 0.0}以外で、{@link
+   *                   FrameLengthConfigurator#interrogativeUpspeakStyle
+   *                   interrogativeUpspeakStyle}が{@link
+   *                   InterrogativeUpspeakStyle#APPEND_MORA}のとき、{@code 0.15}秒
    *               <li>{@link AccentPhrase#pauseMora}の{@link Mora#consonantLength}（通常はない）
    *               <li>{@link AccentPhrase#pauseMora}の{@link Mora#vowelLength}
    *             </ul>
@@ -251,7 +257,8 @@ public final class AudioQuery {
   @Nonnull
   private static native String rsFromAccentPhrases(String accentPhrases);
 
-  private native long rsFrameLength(boolean enableInterrogativeUpspeak);
+  private native long rsFrameLength(
+      boolean enableInterrogativeUpspeak, InterrogativeUpspeakStyle interrogativeUpspeakStyle);
 
   private native void rsValidate();
 
@@ -259,10 +266,12 @@ public final class AudioQuery {
   public final class FrameLengthConfigurator {
     private AudioQuery audioQuery;
     private boolean interrogativeUpspeak; // FIXME: デフォルトで`false`になってしまっている！
+    private InterrogativeUpspeakStyle interrogativeUpspeakStyle;
 
     private FrameLengthConfigurator(AudioQuery audioQuery) {
       this.audioQuery = audioQuery;
       this.interrogativeUpspeak = false;
+      this.interrogativeUpspeakStyle = InterrogativeUpspeakStyle.GLIDE;
     }
 
     /**
@@ -278,6 +287,24 @@ public final class AudioQuery {
     }
 
     /**
+     * 疑問文の語尾の音高の上げ方。デフォルトは{@link InterrogativeUpspeakStyle#GLIDE}。
+     *
+     * <p>{@link #interrogativeUpspeak(boolean) interrogativeUpspeak}が{@code true}のときのみ効果がある。
+     *
+     * @param interrogativeUpspeakStyle 疑問文の語尾の音高の上げ方。
+     * @return {@link FrameLengthConfigurator}。
+     */
+    @Nonnull
+    public FrameLengthConfigurator interrogativeUpspeakStyle(
+        InterrogativeUpspeakStyle interrogativeUpspeakStyle) {
+      if (interrogativeUpspeakStyle == null) {
+        throw new NullPointerException("interrogativeUpspeakStyle");
+      }
+      this.interrogativeUpspeakStyle = interrogativeUpspeakStyle;
+      return this;
+    }
+
+    /**
      * 音声の総フレーム数を算出する。
      *
      * @return 総フレーム数
@@ -287,7 +314,7 @@ public final class AudioQuery {
      * @see AudioQuery#frameLength
      */
     public long calculate() {
-      return audioQuery.rsFrameLength(interrogativeUpspeak);
+      return audioQuery.rsFrameLength(interrogativeUpspeak, interrogativeUpspeakStyle);
     }
   }
 }

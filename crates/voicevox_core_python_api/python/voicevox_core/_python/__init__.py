@@ -285,6 +285,27 @@ def _(on_existing: OnExistingVoiceModelId):
     _: str = on_existing
 
 
+InterrogativeUpspeakStyle: TypeAlias = Literal["APPEND_MORA", "GLIDE"] | _Reserved
+"""
+疑問文の語尾の音高の上げ方。
+
+================= =================================================================
+値                説明
+``"APPEND_MORA"`` 最後のモーラの後ろに、音高を上げた母音のモーラを ``0.15``
+                  秒追加する。VOICEVOX ENGINEと同じ挙動。
+``"GLIDE"``       モーラを追加せず、最後のモーラの母音を ``0.06``
+                  秒伸ばし、その母音の中で音高をなめらかに上げる。デフォルト。
+``_Reserved``     将来のために予約されている値。この値が存在することは決してない。
+                  ``str`` のサブタイプであるため、 ``InterrogativeUpspeakStyle`` を
+                  ``str`` として扱うことは可能。
+================= =================================================================
+"""
+
+
+def _(style: InterrogativeUpspeakStyle):
+    _: str = style
+
+
 @dataclasses.dataclass
 class Mora:
     """
@@ -490,7 +511,12 @@ class AudioQuery:
         """
         _validate_audio_query(self)
 
-    def frame_length(self, *, enable_interrogative_upspeak: bool = True) -> int:
+    def frame_length(
+        self,
+        *,
+        enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
+    ) -> int:
         """
         音声の総フレーム数を算出する。
 
@@ -506,11 +532,14 @@ class AudioQuery:
              - :attr:`AccentPhrase.moras` の要素ごとに
 
                - :attr:`Mora.consonant_length`
-               - :attr:`Mora.vowel_length`
+               - :attr:`Mora.vowel_length` （ただし後述の条件で
+                 ``interrogative_upspeak_style`` が ``"GLIDE"``
+                 のとき、最後のモーラは ``0.06`` 秒足したもの）
 
              - ``enable_interrogative_upspeak`` かつ
                :attr:`AccentPhrase.is_interrogative` かつ :attr:`AccentPhrase.moras`
-               の最後の :attr:`Mora.pitch` が ``0.0`` 以外のとき、``0.15`` 秒
+               の最後の :attr:`Mora.pitch` が ``0.0`` 以外で、
+               ``interrogative_upspeak_style`` が ``"APPEND_MORA"`` のとき、``0.15`` 秒
              - :attr:`AccentPhrase.pause_mora` の
                :attr:`Mora.consonant_length` （通常はない）
              - :attr:`AccentPhrase.pause_mora` の :attr:`Mora.vowel_length`
@@ -574,7 +603,9 @@ class AudioQuery:
         >>> query.speed_scale = 1e-20
         >>> assert query.frame_length() == 0xffffffffffffffff  # 64-bit環境の場合
         """
-        return audio_query_frame_length(self, enable_interrogative_upspeak)
+        return audio_query_frame_length(
+            self, enable_interrogative_upspeak, interrogative_upspeak_style
+        )
 
     # テストに使用する目的でのみ存在
 

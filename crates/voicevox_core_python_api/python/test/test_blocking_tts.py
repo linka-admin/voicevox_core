@@ -59,6 +59,85 @@ def test(synthesizer: Synthesizer) -> None:
     assert len({wav6, wav7, wav8, wav9, wav10}) == 1
 
 
+def test_interrogative_upspeak_style(synthesizer: Synthesizer) -> None:
+    TEXT = "こんにちは？"
+    STYLE_ID = 0
+
+    query = synthesizer.create_audio_query(TEXT, STYLE_ID)
+
+    default_wav = synthesizer.synthesis(query, STYLE_ID)
+    glide_wav = synthesizer.synthesis(
+        query, STYLE_ID, interrogative_upspeak_style="GLIDE"
+    )
+    append_mora_wav = synthesizer.synthesis(
+        query, STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert default_wav == glide_wav
+    assert glide_wav != append_mora_wav
+
+    assert (
+        synthesizer.tts(TEXT, STYLE_ID, interrogative_upspeak_style="APPEND_MORA")
+        == append_mora_wav
+    )
+    assert (
+        synthesizer.tts_from_kana(
+            query.kana or "", STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+        )
+        == append_mora_wav
+    )
+
+    # `streaming_talk`に対応したスタイルを使用。voicevox_core/model/sample.vvm/metas.jsonを参照。
+    STREAMING_STYLE_ID = 302
+    assert len(
+        b"".join(
+            synthesizer.streaming_synthesis(
+                query, STREAMING_STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+            )
+        )
+    ) == len(
+        synthesizer.synthesis(
+            query, STREAMING_STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+        )
+    )
+
+    glide_audio = synthesizer.create_audio_feature(
+        query, STREAMING_STYLE_ID, interrogative_upspeak_style="GLIDE"
+    )
+    append_mora_audio = synthesizer.create_audio_feature(
+        query, STREAMING_STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert glide_audio.frame_length == query.frame_length(
+        interrogative_upspeak_style="GLIDE"
+    )
+    assert append_mora_audio.frame_length == query.frame_length(
+        interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert glide_audio.frame_length != append_mora_audio.frame_length
+
+    # `enable_interrogative_upspeak=False`のときは無関係
+    assert synthesizer.synthesis(
+        query,
+        STYLE_ID,
+        enable_interrogative_upspeak=False,
+        interrogative_upspeak_style="GLIDE",
+    ) == synthesizer.synthesis(
+        query,
+        STYLE_ID,
+        enable_interrogative_upspeak=False,
+        interrogative_upspeak_style="APPEND_MORA",
+    )
+
+
+def test_invalid_interrogative_upspeak_style(synthesizer: Synthesizer) -> None:
+    query = synthesizer.create_audio_query("こんにちは？", 0)
+    with pytest.raises(ValueError, match="InterrogativeUpspeakStyle"):
+        synthesizer.synthesis(
+            query,
+            0,
+            interrogative_upspeak_style="INVALID",  # pyright: ignore[reportArgumentType]
+        )
+
+
 @pytest.fixture
 def synthesizer() -> Synthesizer:
     onnxruntime = Onnxruntime.load_once(filename=conftest.onnxruntime_filename)

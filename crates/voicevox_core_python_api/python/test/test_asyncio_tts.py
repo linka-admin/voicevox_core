@@ -74,6 +74,62 @@ async def test(synthesizer: Synthesizer) -> None:
     assert len({wav6, wav7, wav8, wav9, wav10}) == 1
 
 
+@pytest.mark.asyncio
+async def test_interrogative_upspeak_style(synthesizer: Synthesizer) -> None:
+    TEXT = "こんにちは？"
+    STYLE_ID = 0
+
+    query = await synthesizer.create_audio_query(TEXT, STYLE_ID)
+
+    default_wav = await synthesizer.synthesis(query, STYLE_ID)
+    glide_wav = await synthesizer.synthesis(
+        query, STYLE_ID, interrogative_upspeak_style="GLIDE"
+    )
+    append_mora_wav = await synthesizer.synthesis(
+        query, STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert default_wav == glide_wav
+    assert glide_wav != append_mora_wav
+
+    assert (
+        await synthesizer.tts(TEXT, STYLE_ID, interrogative_upspeak_style="APPEND_MORA")
+        == append_mora_wav
+    )
+    assert (
+        await synthesizer.tts_from_kana(
+            query.kana or "", STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+        )
+        == append_mora_wav
+    )
+
+    # `streaming_talk`に対応したスタイルを使用。voicevox_core/model/sample.vvm/metas.jsonを参照。
+    STREAMING_STYLE_ID = 302
+    glide_audio = await synthesizer.create_audio_feature(
+        query, STREAMING_STYLE_ID, interrogative_upspeak_style="GLIDE"
+    )
+    append_mora_audio = await synthesizer.create_audio_feature(
+        query, STREAMING_STYLE_ID, interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert glide_audio.frame_length == query.frame_length(
+        interrogative_upspeak_style="GLIDE"
+    )
+    assert append_mora_audio.frame_length == query.frame_length(
+        interrogative_upspeak_style="APPEND_MORA"
+    )
+    assert glide_audio.frame_length != append_mora_audio.frame_length
+
+
+@pytest.mark.asyncio
+async def test_invalid_interrogative_upspeak_style(synthesizer: Synthesizer) -> None:
+    query = await synthesizer.create_audio_query("こんにちは？", 0)
+    with pytest.raises(ValueError, match="InterrogativeUpspeakStyle"):
+        await synthesizer.synthesis(
+            query,
+            0,
+            interrogative_upspeak_style="INVALID",  # pyright: ignore[reportArgumentType]
+        )
+
+
 @pytest_asyncio.fixture
 async def synthesizer() -> Synthesizer:
     onnxruntime = await Onnxruntime.load_once(filename=conftest.onnxruntime_filename)

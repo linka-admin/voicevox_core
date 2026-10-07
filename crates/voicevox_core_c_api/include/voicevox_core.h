@@ -141,6 +141,29 @@ typedef int32_t VoicevoxAccelerationMode;
 #endif // __cplusplus
 
 /**
+ * 疑問文の語尾の音高の上げ方。
+ *
+ * \orig-impl{VoicevoxInterrogativeUpspeakStyle}
+ */
+enum VoicevoxInterrogativeUpspeakStyle
+#ifdef __cplusplus
+  : int32_t
+#endif // __cplusplus
+ {
+  /**
+   * 最後のモーラの後ろに、音高を上げた母音のモーラを0.15秒追加する。VOICEVOX ENGINEと同じふるまい
+   */
+  VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA = 0,
+  /**
+   * モーラを追加せず、最後のモーラの母音を0.06秒伸ばし、その母音の中で音高をなめらかに上げる。デフォルトのふるまい
+   */
+  VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE = 1,
+};
+#ifndef __cplusplus
+typedef int32_t VoicevoxInterrogativeUpspeakStyle;
+#endif // __cplusplus
+
+/**
  * ::voicevox_synthesizer_load_voice_model の実行時に、同じIDの ::VoicevoxVoiceModelFile が既に読み込まれていたときのふるまい。
  *
  * \orig-impl{VoicevoxOnExistingVoiceModelId}
@@ -461,6 +484,10 @@ typedef struct VoicevoxAudioQueryFrameLengthOptions {
    * [`AccentPhrase::is_interrogative`](../rust_api/voicevox_core/struct.AccentPhrase.html#structfield.is_interrogative)を認識するかどうか
    */
   bool enable_interrogative_upspeak;
+  /**
+   * 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+   */
+  VoicevoxInterrogativeUpspeakStyle interrogative_upspeak_style;
 } VoicevoxAudioQueryFrameLengthOptions;
 
 /**
@@ -513,6 +540,10 @@ typedef struct VoicevoxSynthesisOptions {
    * 疑問文の調整を有効にする
    */
   bool enable_interrogative_upspeak;
+  /**
+   * 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+   */
+  VoicevoxInterrogativeUpspeakStyle interrogative_upspeak_style;
 } VoicevoxSynthesisOptions;
 
 /**
@@ -525,6 +556,10 @@ typedef struct VoicevoxTtsOptions {
    * 疑問文の調整を有効にする
    */
   bool enable_interrogative_upspeak;
+  /**
+   * 疑問文の語尾の音高の上げ方。`enable_interrogative_upspeak`が`true`のときのみ有効
+   */
+  VoicevoxInterrogativeUpspeakStyle interrogative_upspeak_style;
 } VoicevoxTtsOptions;
 
 /**
@@ -880,9 +915,12 @@ struct VoicevoxAudioQueryFrameLengthOptions voicevox_make_default_audio_query_fr
  *     - [`AudioQuery::accent_phrases`]の要素ごとに
  *         - [`AccentPhrase::moras`]の要素ごとに
  *             - [`Mora::consonant_length`]
- *             - [`Mora::vowel_length`]
+ *             - [`Mora::vowel_length`]（ただし後述の条件で ::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE
+ *               のとき、最後のモーラは`0.06`秒足したもの）
  *         - ::VoicevoxAudioQueryFrameLengthOptions::enable_interrogative_upspeak
- *           かつ[`AccentPhrase::is_interrogative`]かつ`moras`の最後の[`Mora::pitch`]が`0.0`以外のとき、`0.15`秒
+ *           かつ[`AccentPhrase::is_interrogative`]かつ`moras`の最後の[`Mora::pitch`]が`0.0`以外で、
+ *           ::VoicevoxAudioQueryFrameLengthOptions::interrogative_upspeak_style が
+ *           ::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA のとき、`0.15`秒
  *         - [`AccentPhrase::pause_mora`]の`Mora::consonant_length`（通常はない）
  *         - `AccentPhrase::pause_mora`の`Mora::vowel_length`
  *     - [`AudioQuery::post_phoneme_length`]

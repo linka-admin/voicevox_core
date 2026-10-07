@@ -20,9 +20,9 @@ use tracing::error;
 
 use crate::{
     VoicevoxAccelerationMode, VoicevoxAudioQueryFrameLengthOptions, VoicevoxInitializeOptions,
-    VoicevoxLoadVoiceModelOptions, VoicevoxOnExistingVoiceModelId, VoicevoxSynthesisOptions,
-    VoicevoxTtsOptions, VoicevoxUserDictWord, VoicevoxUserDictWordType,
-    result_code::VoicevoxResultCode,
+    VoicevoxInterrogativeUpspeakStyle, VoicevoxLoadVoiceModelOptions,
+    VoicevoxOnExistingVoiceModelId, VoicevoxSynthesisOptions, VoicevoxTtsOptions,
+    VoicevoxUserDictWord, VoicevoxUserDictWordType, result_code::VoicevoxResultCode,
 };
 
 pub(crate) fn into_result_code_with_error(result: CApiResult<()>) -> VoicevoxResultCode {
@@ -225,6 +225,27 @@ impl From<VoicevoxAccelerationMode> for voicevox_core::AccelerationMode {
     }
 }
 
+impl From<VoicevoxInterrogativeUpspeakStyle> for voicevox_core::InterrogativeUpspeakStyle {
+    fn from(value: VoicevoxInterrogativeUpspeakStyle) -> Self {
+        use VoicevoxInterrogativeUpspeakStyle::*;
+        match value {
+            VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA => Self::AppendMora,
+            VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE => Self::Glide,
+        }
+    }
+}
+
+impl From<voicevox_core::InterrogativeUpspeakStyle> for VoicevoxInterrogativeUpspeakStyle {
+    fn from(value: voicevox_core::InterrogativeUpspeakStyle) -> Self {
+        use voicevox_core::InterrogativeUpspeakStyle::*;
+        match value {
+            AppendMora => Self::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA,
+            Glide => Self::VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl From<VoicevoxOnExistingVoiceModelId> for voicevox_core::OnExistingVoiceModelId {
     fn from(value: VoicevoxOnExistingVoiceModelId) -> Self {
         use VoicevoxOnExistingVoiceModelId::*;
@@ -253,6 +274,7 @@ impl Default for VoicevoxAudioQueryFrameLengthOptions {
         Self {
             enable_interrogative_upspeak:
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle::default().into(),
         }
     }
 }
@@ -279,6 +301,7 @@ impl Default for VoicevoxSynthesisOptions {
         Self {
             enable_interrogative_upspeak:
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle::default().into(),
         }
     }
 }
@@ -288,6 +311,7 @@ impl Default for VoicevoxTtsOptions {
         Self {
             enable_interrogative_upspeak:
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle::default().into(),
         }
     }
 }

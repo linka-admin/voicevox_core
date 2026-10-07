@@ -10,6 +10,7 @@ if TYPE_CHECKING:
         AudioQuery,
         CharacterMeta,
         FrameAudioQuery,
+        InterrogativeUpspeakStyle,
         OnExistingVoiceModelId,
         Score,
         StyleId,
@@ -440,6 +441,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> AudioFeature:
         """
         :class:`AudioQuery` から中間表現である :class:`AudioFeature` を生成する。
@@ -452,6 +454,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------
@@ -487,6 +491,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> bytes:
         """
         :class:`AudioQuery` から音声合成する。
@@ -499,6 +504,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------
@@ -511,6 +518,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> SynthesisStream:
         """
         :class:`AudioQuery` からストリーミングで音声合成する。
@@ -523,6 +531,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------
@@ -535,6 +545,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> bytes:
         """
         AquesTalk風記法から音声合成を行う。
@@ -547,6 +558,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
         """
         ...
     def tts(
@@ -555,6 +568,7 @@ class Synthesizer:
         style_id: StyleId | int,
         *,
         enable_interrogative_upspeak: bool = True,
+        interrogative_upspeak_style: InterrogativeUpspeakStyle = "GLIDE",
     ) -> bytes:
         """
         日本語のテキストから音声合成を行う。
@@ -572,6 +586,8 @@ class Synthesizer:
             スタイルID。
         enable_interrogative_upspeak
             疑問文の調整を有効にするかどうか。
+        interrogative_upspeak_style
+            疑問文の調整の方式。 ``enable_interrogative_upspeak`` が ``True`` のときのみ有効。
 
         Returns
         -------

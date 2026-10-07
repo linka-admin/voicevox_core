@@ -6,6 +6,7 @@ if TYPE_CHECKING:
         AudioQuery,
         FrameAudioQuery,
         FramePhoneme,
+        InterrogativeUpspeakStyle,
         Mora,
         Note,
         Score,
@@ -150,7 +151,9 @@ def _audio_query_from_accent_phrases(
 def _audio_query_from_json(json: str) -> AudioQuery: ...
 def _audio_query_to_json(audio_query: AudioQuery) -> str: ...
 def audio_query_frame_length(
-    audio_query: AudioQuery, enable_interrogative_upspeak: bool
+    audio_query: AudioQuery,
+    enable_interrogative_upspeak: bool,
+    interrogative_upspeak_style: InterrogativeUpspeakStyle,
 ) -> int: ...
 def _validate_mora(mora: Mora) -> None: ...
 def _validate_accent_phrase(accent_phrase: AccentPhrase) -> None: ...

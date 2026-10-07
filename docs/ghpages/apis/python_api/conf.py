@@ -65,6 +65,7 @@ def _on_missing_reference(
     TARGETS = {
         "AccelerationMode",
         "CharacterVersion",
+        "InterrogativeUpspeakStyle",
         "StyleId",
         "StyleType",
         "UserDictWordType",

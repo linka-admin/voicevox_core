@@ -8,6 +8,7 @@ import static jp.hiroshiba.voicevoxcore.Wav.wavFromS16le;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,7 @@ import jp.hiroshiba.voicevoxcore.AccentPhrase;
 import jp.hiroshiba.voicevoxcore.AudioFeature;
 import jp.hiroshiba.voicevoxcore.AudioQuery;
 import jp.hiroshiba.voicevoxcore.FrameAudioQuery;
+import jp.hiroshiba.voicevoxcore.InterrogativeUpspeakStyle;
 import jp.hiroshiba.voicevoxcore.Mora;
 import jp.hiroshiba.voicevoxcore.Note;
 import jp.hiroshiba.voicevoxcore.Score;
@@ -242,6 +244,114 @@ class SynthesizerTest extends TestUtils {
     byte[] wav2 = wavFromS16le(pcm, query.outputSamplingRate, query.outputStereo);
 
     assertArrayEquals(wav1, wav2);
+  }
+
+  @Test
+  void checkInterrogativeUpspeakStyle() throws RunModelException, InvalidModelDataException {
+    Onnxruntime onnxruntime = loadOnnxruntime();
+    OpenJtalk openJtalk = loadOpenJtalk();
+    Synthesizer synthesizer = Synthesizer.builder(onnxruntime, openJtalk).build();
+    try (VoiceModelFile model = openModel()) {
+      synthesizer.loadVoiceModel(model).perform();
+    }
+
+    final String TEXT = "こんにちは？";
+    // `streaming_talk`に対応したスタイルを使用する
+    final int STYLE_ID = 302;
+
+    AudioQuery query = synthesizer.createAudioQuery(TEXT, STYLE_ID);
+    assertTrue(query.accentPhrases.get(query.accentPhrases.size() - 1).isInterrogative);
+
+    byte[][] wavs = new byte[2][];
+    long[] frameLengths = new long[2];
+    InterrogativeUpspeakStyle[] styles = {
+      InterrogativeUpspeakStyle.APPEND_MORA, InterrogativeUpspeakStyle.GLIDE
+    };
+    for (int i = 0; i < styles.length; i++) {
+      InterrogativeUpspeakStyle style = styles[i];
+
+      long frameLength =
+          query
+              .frameLength()
+              .interrogativeUpspeak(true)
+              .interrogativeUpspeakStyle(style)
+              .calculate();
+      AudioFeature audioFeature =
+          synthesizer
+              .createAudioFeature(query, STYLE_ID)
+              .interrogativeUpspeak(true)
+              .interrogativeUpspeakStyle(style)
+              .perform();
+      assertEquals(frameLength, audioFeature.getFrameLength());
+
+      byte[] wav1 =
+          synthesizer
+              .tts(TEXT, STYLE_ID)
+              .interrogativeUpspeak(true)
+              .interrogativeUpspeakStyle(style)
+              .perform();
+      byte[] wav2 =
+          synthesizer
+              .ttsFromKana(query.kana, STYLE_ID)
+              .interrogativeUpspeak(true)
+              .interrogativeUpspeakStyle(style)
+              .perform();
+      byte[] wav3 =
+          synthesizer
+              .synthesis(query, STYLE_ID)
+              .interrogativeUpspeak(true)
+              .interrogativeUpspeakStyle(style)
+              .perform();
+      byte[] pcm = synthesizer.render(audioFeature, 0, audioFeature.getFrameLength());
+      byte[] wav4 = wavFromS16le(pcm, query.outputSamplingRate, query.outputStereo);
+      assertArrayEquals(wav1, wav2);
+      assertArrayEquals(wav1, wav3);
+      assertArrayEquals(wav1, wav4);
+
+      wavs[i] = wav1;
+      frameLengths[i] = frameLength;
+    }
+
+    // `APPEND_MORA`と`GLIDE`とでは結果が異なる
+    assertNotEquals(frameLengths[0], frameLengths[1]);
+    assertFalse(Arrays.equals(wavs[0], wavs[1]));
+
+    // デフォルトは`GLIDE`
+    assertEquals(frameLengths[1], query.frameLength().interrogativeUpspeak(true).calculate());
+    assertArrayEquals(
+        wavs[1], synthesizer.synthesis(query, STYLE_ID).interrogativeUpspeak(true).perform());
+
+    // 疑問文の調整が無効のときは、どちらでも同じ
+    assertEquals(
+        query
+            .frameLength()
+            .interrogativeUpspeakStyle(InterrogativeUpspeakStyle.APPEND_MORA)
+            .calculate(),
+        query.frameLength().interrogativeUpspeakStyle(InterrogativeUpspeakStyle.GLIDE).calculate());
+    assertArrayEquals(
+        synthesizer
+            .synthesis(query, STYLE_ID)
+            .interrogativeUpspeakStyle(InterrogativeUpspeakStyle.APPEND_MORA)
+            .perform(),
+        synthesizer
+            .synthesis(query, STYLE_ID)
+            .interrogativeUpspeakStyle(InterrogativeUpspeakStyle.GLIDE)
+            .perform());
+
+    assertThrowsExactly(
+        NullPointerException.class, () -> query.frameLength().interrogativeUpspeakStyle(null));
+    assertThrowsExactly(
+        NullPointerException.class,
+        () -> synthesizer.synthesis(query, STYLE_ID).interrogativeUpspeakStyle(null));
+    assertThrowsExactly(
+        NullPointerException.class,
+        () -> synthesizer.createAudioFeature(query, STYLE_ID).interrogativeUpspeakStyle(null));
+    assertThrowsExactly(
+        NullPointerException.class,
+        () -> synthesizer.tts(TEXT, STYLE_ID).interrogativeUpspeakStyle(null));
+    assertThrowsExactly(
+        NullPointerException.class,
+        () -> synthesizer.ttsFromKana(query.kana, STYLE_ID).interrogativeUpspeakStyle(null));
   }
 
   @Test

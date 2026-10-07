@@ -1,5 +1,7 @@
 use crate::{
-    common::{JNIEnvExt as _, query_from_json, throw_if_err},
+    common::{
+        JNIEnvExt as _, interrogative_upspeak_style_from_java, query_from_json, throw_if_err,
+    },
     object, object_type, static_field,
 };
 
@@ -515,8 +517,11 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
     query_json: JString<'local>,
     style_id: jint,
     enable_interrogative_upspeak: jboolean,
+    interrogative_upspeak_style: JObject<'local>,
 ) -> jobject {
     throw_if_err(env, std::ptr::null_mut(), |env| {
+        let interrogative_upspeak_style =
+            interrogative_upspeak_style_from_java(env, &interrogative_upspeak_style)?;
         let audio_query: String = env.get_string(&query_json)?.into();
         let audio_query: voicevox_core::AudioQuery = query_from_json(&audio_query)?;
         let style_id = style_id as u32;
@@ -535,6 +540,7 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
         let wave = internal
             .synthesis(&audio_query, voicevox_core::StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak != 0)
+            .interrogative_upspeak_style(interrogative_upspeak_style)
             .perform()?;
 
         let j_bytes = env.byte_array_from_slice(&wave)?;
@@ -553,8 +559,11 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
     query_json: JString<'local>,
     style_id: jint,
     enable_interrogative_upspeak: jboolean,
+    interrogative_upspeak_style: JObject<'local>,
 ) -> jobject {
     throw_if_err(env, std::ptr::null_mut(), |env| {
+        let interrogative_upspeak_style =
+            interrogative_upspeak_style_from_java(env, &interrogative_upspeak_style)?;
         let audio_query: String = env.get_string(&query_json)?.into();
         let audio_query: voicevox_core::AudioQuery = query_from_json(&audio_query)?;
         let style_id = style_id as u32;
@@ -573,6 +582,7 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
         let audio_feature_internal = internal
             .create_audio_feature(&audio_query, voicevox_core::StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak != 0)
+            .interrogative_upspeak_style(interrogative_upspeak_style)
             .perform()?
             .into();
 
@@ -638,8 +648,11 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
     kana: JString<'local>,
     style_id: jint,
     enable_interrogative_upspeak: jboolean,
+    interrogative_upspeak_style: JObject<'local>,
 ) -> jobject {
     throw_if_err(env, std::ptr::null_mut(), |env| {
+        let interrogative_upspeak_style =
+            interrogative_upspeak_style_from_java(env, &interrogative_upspeak_style)?;
         let kana: String = env.get_string(&kana)?.into();
         let style_id = style_id as u32;
 
@@ -657,6 +670,7 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
         let wave = internal
             .tts_from_kana(&kana, voicevox_core::StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak != 0)
+            .interrogative_upspeak_style(interrogative_upspeak_style)
             .perform()?;
 
         let j_bytes = env.byte_array_from_slice(&wave)?;
@@ -673,8 +687,11 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
     query_json: JString<'local>,
     style_id: jint,
     enable_interrogative_upspeak: jboolean,
+    interrogative_upspeak_style: JObject<'local>,
 ) -> jobject {
     throw_if_err(env, std::ptr::null_mut(), |env| {
+        let interrogative_upspeak_style =
+            interrogative_upspeak_style_from_java(env, &interrogative_upspeak_style)?;
         let text: String = env.get_string(&query_json)?.into();
         let style_id = style_id as u32;
 
@@ -692,6 +709,7 @@ unsafe extern "system" fn Java_jp_hiroshiba_voicevoxcore_blocking_Synthesizer_rs
         let wave = internal
             .tts(&text, voicevox_core::StyleId::new(style_id))
             .enable_interrogative_upspeak(enable_interrogative_upspeak != 0)
+            .interrogative_upspeak_style(interrogative_upspeak_style)
             .perform()?;
 
         let j_bytes = env.byte_array_from_slice(&wave)?;

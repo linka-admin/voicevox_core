@@ -187,6 +187,25 @@ pub(crate) fn query_from_json<T: Validate>(json: &str) -> JavaApiResult<T> {
         .map_err(|e| JavaApiError::DeQuery(T::validation_error_description(), e))
 }
 
+/// `jp.hiroshiba.voicevoxcore.InterrogativeUpspeakStyle`を変換する。`null`のときはデフォルト値とする。
+pub(crate) fn interrogative_upspeak_style_from_java(
+    env: &mut JNIEnv<'_>,
+    style: &JObject<'_>,
+) -> JavaApiResult<voicevox_core::InterrogativeUpspeakStyle> {
+    if style.is_null() {
+        return Ok(Default::default());
+    }
+    let append_mora = static_field!(env, "InterrogativeUpspeakStyle", "APPEND_MORA")?;
+    let glide = static_field!(env, "InterrogativeUpspeakStyle", "GLIDE")?;
+    Ok(if env.is_same_object(style, append_mora)? {
+        voicevox_core::InterrogativeUpspeakStyle::AppendMora
+    } else if env.is_same_object(style, glide)? {
+        voicevox_core::InterrogativeUpspeakStyle::Glide
+    } else {
+        panic!("予期しない`InterrogativeUpspeakStyle`です: {style:?}");
+    })
+}
+
 pub(crate) type JavaApiResult<T> = Result<T, JavaApiError>;
 
 #[derive(From, Debug)]
