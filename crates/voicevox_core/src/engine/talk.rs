@@ -15,5 +15,7 @@ pub(crate) use self::interpret_query::{DecoderFeature, initial_process, split_mo
 pub(crate) use self::kana_parser::{KanaParseError, create_kana, parse_kana};
 pub use self::{
     audio_query::{AccentPhrase, AudioQuery, Mora},
-    interpret_query::{AudioQueryFrameLength, DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK},
+    interpret_query::{
+        AudioQueryFrameLength, DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK, InterrogativeUpspeakStyle,
+    },
 };

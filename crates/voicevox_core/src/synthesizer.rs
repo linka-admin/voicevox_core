@@ -62,9 +62,9 @@ use crate::{
             validate::{ValidatedNote, ValidatedScore},
         },
         talk::{
-            DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK, DecoderFeature, LengthedPhoneme,
-            ValidatedAccentPhrase, ValidatedMora, create_kana, initial_process, parse_kana,
-            split_mora,
+            DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK, DecoderFeature, InterrogativeUpspeakStyle,
+            LengthedPhoneme, ValidatedAccentPhrase, ValidatedMora, create_kana, initial_process,
+            parse_kana, split_mora,
         },
         to_s16le_pcm, wav_from_s16le,
     },
@@ -82,6 +82,7 @@ pub const DEFAULT_HEAVY_INFERENCE_CANCELLABLE: bool =
 #[debug(bound(A::Cancellable: Debug))]
 struct SynthesisOptions<A: infer::AsyncExt> {
     enable_interrogative_upspeak: bool,
+    interrogative_upspeak_style: InterrogativeUpspeakStyle,
     cancellable: A::Cancellable,
 }
 
@@ -89,8 +90,16 @@ impl<A: infer::AsyncExt> Default for SynthesisOptions<A> {
     fn default() -> Self {
         Self {
             enable_interrogative_upspeak: DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style: Default::default(),
             cancellable: A::DEFAULT_HEAVY_INFERENCE_CANCELLABLE,
         }
+    }
+}
+
+impl<A: infer::AsyncExt> SynthesisOptions<A> {
+    fn interrogative_upspeak(&self) -> Option<InterrogativeUpspeakStyle> {
+        self.enable_interrogative_upspeak
+            .then_some(self.interrogative_upspeak_style)
     }
 }
 
@@ -442,12 +451,13 @@ trait AsInner {
         let Saturating(frame_length) = audio_query
             .frame_length()
             .enable_interrogative_upspeak(options.enable_interrogative_upspeak)
+            .interrogative_upspeak_style(options.interrogative_upspeak_style)
             .calculate();
 
         let audio_query = audio_query.to_validated()?;
 
         let DecoderFeature { f0, phoneme } =
-            audio_query.decoder_feature(options.enable_interrogative_upspeak);
+            audio_query.decoder_feature(options.interrogative_upspeak());
 
         let spec = self
             .generate_full_intermediate(
@@ -494,7 +504,7 @@ trait AsInner {
         if self.status().contains_domain::<TalkDomain>(style_id) {
             let audio_query = audio_query.to_validated()?;
             let DecoderFeature { f0, phoneme } =
-                audio_query.decoder_feature(options.enable_interrogative_upspeak);
+                audio_query.decoder_feature(options.interrogative_upspeak());
             let wave = &self
                 .decode(
                     f0.len(),
@@ -1600,6 +1610,7 @@ impl<'a, A: AsyncExt> SynthesisStreamInner<'a, A> {
         let Saturating(frame_length) = audio_query
             .frame_length()
             .enable_interrogative_upspeak(options.synthesis.enable_interrogative_upspeak)
+            .interrogative_upspeak_style(options.synthesis.interrogative_upspeak_style)
             .calculate();
         let (offset_frames, segment_frames) = options.segmentation.to_frames(frame_length);
         let audio_feature = synthesizer
@@ -2905,6 +2916,17 @@ pub(crate) mod blocking {
             self
         }
 
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.interrogative_upspeak_style = style;
+            self
+        }
+
         /// 実行する。
         pub fn perform(self) -> crate::Result<AudioFeature> {
             self.synthesizer
@@ -2925,6 +2947,17 @@ pub(crate) mod blocking {
     impl Synthesis<'_> {
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.interrogative_upspeak_style = style;
             self
         }
 
@@ -2958,6 +2991,17 @@ pub(crate) mod blocking {
         /// [実行]: Self::perform
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.synthesis.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
             self
         }
 
@@ -3030,6 +3074,17 @@ pub(crate) mod blocking {
             self
         }
 
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
+            self
+        }
+
         /// 実行する。
         pub fn perform(self) -> crate::Result<Vec<u8>> {
             self.synthesizer
@@ -3067,6 +3122,17 @@ pub(crate) mod blocking {
     impl<T: crate::blocking::TextAnalyzer> Tts<'_, T> {
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.synthesis.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
             self
         }
 
@@ -4076,6 +4142,17 @@ pub(crate) mod nonblocking {
             self
         }
 
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.interrogative_upspeak_style = style;
+            self
+        }
+
         /// 実行する。
         pub async fn perform(self) -> crate::Result<AudioFeature> {
             self.synthesizer
@@ -4096,6 +4173,17 @@ pub(crate) mod nonblocking {
     impl Synthesis<'_> {
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.interrogative_upspeak_style = style;
             self
         }
 
@@ -4139,6 +4227,17 @@ pub(crate) mod nonblocking {
         /// [実行]: Self::perform
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.synthesis.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
             self
         }
 
@@ -4211,6 +4310,17 @@ pub(crate) mod nonblocking {
             self
         }
 
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
+            self
+        }
+
         /// 音声モデルの実行をキャンセル可能にするかどうか。
         ///
         /// このオプションを有効にすると、負荷がかかっている状況下でハングする可能性がある。そのためデフォルトでは無効化されている。[VOICEVOX/voicevox_core#968]を参照。
@@ -4269,6 +4379,17 @@ pub(crate) mod nonblocking {
     impl<T: crate::nonblocking::TextAnalyzer> Tts<'_, T> {
         pub fn enable_interrogative_upspeak(mut self, enable_interrogative_upspeak: bool) -> Self {
             self.options.synthesis.enable_interrogative_upspeak = enable_interrogative_upspeak;
+            self
+        }
+
+        /// 疑問文の語尾の音高の上げ方。[`enable_interrogative_upspeak`]が`true`のときのみ有効。
+        ///
+        /// [`enable_interrogative_upspeak`]: Self::enable_interrogative_upspeak
+        pub fn interrogative_upspeak_style(
+            mut self,
+            style: crate::InterrogativeUpspeakStyle,
+        ) -> Self {
+            self.options.synthesis.interrogative_upspeak_style = style;
             self
         }
 
