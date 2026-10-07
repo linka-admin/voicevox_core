@@ -15,7 +15,7 @@ VOICEVOX CORE Downloaderは環境に合わせてそれらをダウンロード�
 | `onnxruntime` | {output}/onnxruntime/ | (VOICEVOX) ONNX Runtime |
 | `additional-libraries` | {output}/additional_libraries/ | `--devices`で指定したDirectMLやCUDA |
 | `models` | {output}/models/ | VOICEVOX音声モデル（VVMファイル） |
-| `dict` | {output}/dict/ | Open JTalkのシステム辞書 |
+| `dict` | {output}/dict/ | Open JTalkのシステム辞書（[pyopenjtalk-plus](https://github.com/tsukumijima/pyopenjtalk-plus)版。[linka-admin/open_jtalk](https://github.com/linka-admin/open_jtalk/releases)で配布） |
 
 {output}は`-o, --output`で指定したディレクトリで、デフォルトは`./voicevox_core/`です。
 
