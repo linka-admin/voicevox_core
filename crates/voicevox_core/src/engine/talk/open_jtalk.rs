@@ -7,7 +7,8 @@ use std::{
 use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
 use open_jtalk::{
-    JpCommon, ManagedResource, Mecab, Njd, Text2MecabError, mecab_dict_index, text2mecab,
+    JpCommon, ManagedResource, Mecab, Njd, NjdFeature, Text2MecabError, mecab_dict_index,
+    text2mecab,
 };
 use tempfile::NamedTempFile;
 
@@ -113,8 +114,7 @@ impl Inner {
 }
 
 impl FullcontextExtractor for Inner {
-    /// pyopenjtalk-plusの`OpenJTalk.run_frontend`（と、その前段の`normalize_unknown_itaiji`）に
-    /// 相当する処理を行い、フルコンテキストラベルを作る。
+    /// pyopenjtalk-plusの`run_frontend`に相当する処理を行い、フルコンテキストラベルを作る。
     ///
     /// 規則そのものは[`super::plus`]にあり、ここではOpen JTalkの各段階との受け渡しだけを行う。
     fn extract_fullcontext(&self, text: &str) -> anyhow::Result<Vec<String>> {
@@ -125,32 +125,8 @@ impl FullcontextExtractor for Inner {
         } = &mut *self.resources.lock().unwrap();
 
         jpcommon.refresh();
-        njd.refresh();
-        mecab.refresh();
-
-        // NULはCの文字列を終端してしまうので取り除く
-        let text = text.replace('\0', "");
-        let text = plus::normalize_unknown_itaiji(
-            &text,
-            |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
-            |s| run_mecab(mecab, s),
-        )?;
-
-        let mecab_features = plus::apply_mecab_rules(&run_mecab(mecab, &text)?);
-        njd.mecab2njd_from_features(&plus::expand_unknown_numeral_chunks(&mecab_features));
-        njd.set_pronunciation();
-        let (features, has_number_boundary) =
-            plus::apply_njd_rules_before_digit(njd.features(), &mecab_features);
+        let features = run_frontend(mecab, njd, text)?;
         njd.set_features(&features);
-        njd.set_digit();
-        if has_number_boundary {
-            let features = plus::remove_number_boundaries(njd.features());
-            njd.set_features(&features);
-        }
-        njd.set_accent_phrase();
-        njd.set_accent_type();
-        njd.set_unvoiced_vowel();
-        njd.set_long_vowel();
         jpcommon.njd2jpcommon(njd);
         jpcommon.make_label();
         jpcommon
@@ -162,6 +138,44 @@ impl FullcontextExtractor for Inner {
             .map(|iter| iter.map(|s| s.to_string()).collect())
             .map_err(Into::into)
     }
+}
+
+/// pyopenjtalk-plusの`run_frontend`（`predict_nani`、`use_sudachi_kanji_yomi`などモデルや外部辞書を
+/// 使う処理を除く）に相当する処理を行い、NJDの特徴量を返す。
+fn run_frontend(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
+    mecab.refresh();
+
+    // NULはCの文字列を終端してしまうので取り除く
+    let text = text.replace('\0', "");
+    let text = plus::normalize_unknown_itaiji(
+        &text,
+        |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
+        |s| run_mecab(mecab, s),
+    )?;
+
+    let features = run_njd(mecab, njd, &text)?;
+    plus::apply_postprocessing(features, &mut |text| run_njd(mecab, njd, text))
+}
+
+/// pyopenjtalk-plusの`OpenJTalk.run_frontend`に相当する、MeCabとNJDの全段階を行う。
+fn run_njd(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
+    njd.refresh();
+    let mecab_features = plus::apply_mecab_rules(&run_mecab(mecab, text)?);
+    njd.mecab2njd_from_features(&plus::expand_unknown_numeral_chunks(&mecab_features));
+    njd.set_pronunciation();
+    let (features, has_number_boundary) =
+        plus::apply_njd_rules_before_digit(njd.features(), &mecab_features);
+    njd.set_features(&features);
+    njd.set_digit();
+    if has_number_boundary {
+        let features = plus::remove_number_boundaries(njd.features());
+        njd.set_features(&features);
+    }
+    njd.set_accent_phrase();
+    njd.set_accent_type();
+    njd.set_unvoiced_vowel();
+    njd.set_long_vowel();
+    Ok(njd.features())
 }
 
 /// MeCabで解析し、特徴量の文字列を返す。
@@ -356,88 +370,91 @@ mod tests {
 
     fn testdata_hello_hiho() -> Vec<String> {
         // こんにちは、ヒホです。の期待値
+        //
+        // 標準の辞書では「ヒ」がフィラーになるので、pyopenjtalk-plusの後処理（`modify_filler_accent`）
+        // により「ヒ」と「ホです」が別のアクセント句になる
         vec![
             // sil (無音)
             String::from(
                 "xx^xx-sil+k=o/A:xx+xx+xx/B:xx-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx",
             ) + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:5_5%0_0_xx/H:xx_xx/I:xx-xx"
-                + "@xx+xx&xx-xx|xx+xx/J:1_5/K:2+2-9",
+                + "@xx+xx&xx-xx|xx+xx/J:1_5/K:2+3-9",
             // k
             String::from("xx^sil-k+o=N/A:-4+1+5/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // o
             String::from("sil^k-o+N=n/A:-4+1+5/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // N (ん)
             String::from("k^o-N+n=i/A:-3+2+4/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // n
             String::from("o^N-n+i=ch/A:-2+3+3/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // i
             String::from("N^n-i+ch=i/A:-2+3+3/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // ch
             String::from("n^i-ch+i=w/A:-1+4+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // i
             String::from("i^ch-i+w=a/A:-1+4+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // w
             String::from("ch^i-w+a=pau/A:0+5+1/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // a
             String::from("i^w-a+pau=h/A:0+5+1/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
-                + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
+                + "/F:5_5#0_0@1_1|1_5/G:1_1%0_0_0/H:xx_xx/I:1-5"
+                + "@1+2&1-3|1+9/J:2_4/K:2+3-9",
             // pau (読点)
             String::from("w^a-pau+h=i/A:xx+xx+xx/B:09-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:5_5!0_0-xx")
-                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:4_1%0_0_xx/H:1_5/I:xx-xx"
-                + "@xx+xx&xx-xx|xx+xx/J:1_4/K:2+2-9",
+                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:1_1%0_0_xx/H:1_5/I:xx-xx"
+                + "@xx+xx&xx-xx|xx+xx/J:2_4/K:2+3-9",
             // h
-            String::from("a^pau-h+i=h/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("a^pau-h+i=h/A:0+1+1/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
+                + "/F:1_1#0_0@1_2|1_4/G:3_1%0_0_1/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // i
-            String::from("pau^h-i+h=o/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("pau^h-i+h=o/A:0+1+1/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
+                + "/F:1_1#0_0@1_2|1_4/G:3_1%0_0_1/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // h
-            String::from("h^i-h+o=d/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("h^i-h+o=d/A:0+1+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // o
-            String::from("i^h-o+d=e/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("i^h-o+d=e/A:0+1+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // d
-            String::from("h^o-d+e=s/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("h^o-d+e=s/A:1+2+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // e
-            String::from("o^d-e+s=U/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("o^d-e+s=U/A:1+2+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // s
-            String::from("d^e-s+U=sil/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("d^e-s+U=sil/A:2+3+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // U (無声母音)
-            String::from("e^s-U+sil=xx/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
-                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
-                + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
+            String::from("e^s-U+sil=xx/A:2+3+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:1_1!0_0-1")
+                + "/F:3_1#0_0@2_1|2_3/G:xx_xx%xx_xx_xx/H:1_5/I:2-4"
+                + "@2+1&2-2|6+4/J:xx_xx/K:2+3-9",
             // sil (無音)
-            String::from("s^U-sil+xx=xx/A:xx+xx+xx/B:10-7_2/C:xx_xx+xx/D:xx+xx_xx/E:4_1!0_0-xx")
-                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:xx_xx%xx_xx_xx/H:1_4/I:xx-xx"
-                + "@xx+xx&xx-xx|xx+xx/J:xx_xx/K:2+2-9",
+            String::from("s^U-sil+xx=xx/A:xx+xx+xx/B:10-7_2/C:xx_xx+xx/D:xx+xx_xx/E:3_1!0_0-xx")
+                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:xx_xx%xx_xx_xx/H:2_4/I:xx-xx"
+                + "@xx+xx&xx-xx|xx+xx/J:xx_xx/K:2+3-9",
         ]
     }
 
