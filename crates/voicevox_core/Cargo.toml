@@ -14,6 +14,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 name = "talk"
 required-features = ["load-onnxruntime"] # TODO: 将来的には`link-onnxruntime`でも動くようにする
 
+[[example]]
+name = "talk_ab"
+required-features = ["load-onnxruntime"]
+
 [[bench]]
 name = "simulation"
 harness = false
