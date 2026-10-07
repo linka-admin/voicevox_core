@@ -13,6 +13,8 @@ use tempfile::NamedTempFile;
 
 use crate::error::ErrorRepr;
 
+use super::plus;
+
 #[derive(thiserror::Error, Debug)]
 #[error("`{function}`の実行が失敗しました")]
 struct OpenjtalkFunctionError {
@@ -111,6 +113,10 @@ impl Inner {
 }
 
 impl FullcontextExtractor for Inner {
+    /// pyopenjtalk-plusの`OpenJTalk.run_frontend`（と、その前段の`normalize_unknown_itaiji`）に
+    /// 相当する処理を行い、フルコンテキストラベルを作る。
+    ///
+    /// 規則そのものは[`super::plus`]にあり、ここではOpen JTalkの各段階との受け渡しだけを行う。
     fn extract_fullcontext(&self, text: &str) -> anyhow::Result<Vec<String>> {
         let Resources {
             mecab,
@@ -122,41 +128,68 @@ impl FullcontextExtractor for Inner {
         njd.refresh();
         mecab.refresh();
 
-        let mecab_text = text2mecab(text).map_err(|e| OpenjtalkFunctionError {
-            function: "text2mecab",
-            source: Some(e),
-        })?;
-        if mecab.analysis(mecab_text) {
-            njd.mecab2njd(
-                mecab.get_feature().ok_or(OpenjtalkFunctionError {
-                    function: "Mecab_get_feature",
-                    source: None,
-                })?,
-                mecab.get_size(),
-            );
-            njd.set_pronunciation();
-            njd.set_digit();
-            njd.set_accent_phrase();
-            njd.set_accent_type();
-            njd.set_unvoiced_vowel();
-            njd.set_long_vowel();
-            jpcommon.njd2jpcommon(njd);
-            jpcommon.make_label();
-            jpcommon
-                .get_label_feature_to_iter()
-                .ok_or(OpenjtalkFunctionError {
-                    function: "JPCommon_get_label_feature",
-                    source: None,
-                })
-                .map(|iter| iter.map(|s| s.to_string()).collect())
-                .map_err(Into::into)
-        } else {
-            Err(OpenjtalkFunctionError {
-                function: "Mecab_analysis",
-                source: None,
-            }
-            .into())
+        // NULはCの文字列を終端してしまうので取り除く
+        let text = text.replace('\0', "");
+        let text = plus::normalize_unknown_itaiji(
+            &text,
+            |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
+            |s| run_mecab(mecab, s),
+        )?;
+
+        let mecab_features = plus::apply_mecab_rules(&run_mecab(mecab, &text)?);
+        njd.mecab2njd_from_features(&plus::expand_unknown_numeral_chunks(&mecab_features));
+        njd.set_pronunciation();
+        let (features, has_number_boundary) =
+            plus::apply_njd_rules_before_digit(njd.features(), &mecab_features);
+        njd.set_features(&features);
+        njd.set_digit();
+        if has_number_boundary {
+            let features = plus::remove_number_boundaries(njd.features());
+            njd.set_features(&features);
         }
+        njd.set_accent_phrase();
+        njd.set_accent_type();
+        njd.set_unvoiced_vowel();
+        njd.set_long_vowel();
+        jpcommon.njd2jpcommon(njd);
+        jpcommon.make_label();
+        jpcommon
+            .get_label_feature_to_iter()
+            .ok_or(OpenjtalkFunctionError {
+                function: "JPCommon_get_label_feature",
+                source: None,
+            })
+            .map(|iter| iter.map(|s| s.to_string()).collect())
+            .map_err(Into::into)
+    }
+}
+
+/// MeCabで解析し、特徴量の文字列を返す。
+fn run_mecab(mecab: &mut Mecab, text: &str) -> anyhow::Result<Vec<String>> {
+    let mecab_text = text2mecab(text).map_err(text2mecab_error)?;
+    if !mecab.analysis(mecab_text) {
+        return Err(OpenjtalkFunctionError {
+            function: "Mecab_analysis",
+            source: None,
+        }
+        .into());
+    }
+    if mecab.get_feature().is_none() {
+        return Err(OpenjtalkFunctionError {
+            function: "Mecab_get_feature",
+            source: None,
+        }
+        .into());
+    }
+    let features = mecab.features();
+    mecab.refresh();
+    Ok(features)
+}
+
+fn text2mecab_error(e: Text2MecabError) -> OpenjtalkFunctionError {
+    OpenjtalkFunctionError {
+        function: "text2mecab",
+        source: Some(e),
     }
 }
 
@@ -437,6 +470,25 @@ mod tests {
             let result = open_jtalk.0.extract_fullcontext(text);
             assert_debug_fmt_eq!(expected, result);
         }
+    }
+
+    /// pyopenjtalk-plusのMeCab・NJD段階の規則が適用されるか。
+    #[rstest]
+    // 数字間の空白で位取りを分ける
+    #[case("EF65 1032号機", "イイエ'フ/ロクジュウゴ'/センサ'ンジュウ/ニゴ'オキ")]
+    // 伏字の「〇〇」はマルと読む
+    #[case("〇〇町", "マルマル'マチ")]
+    // 辞書で読めない異体字は通用字にする
+    #[case("𠮷野家", "ヨシノ'ヤ")]
+    fn extract_fullcontext_applies_pyopenjtalk_plus_rules(
+        #[case] text: &str,
+        #[case] expected: &str,
+    ) {
+        let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let actual = super::super::extract_full_context_label(&open_jtalk, text)
+            .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+            .unwrap();
+        assert_eq!(expected, actual);
     }
 
     /// `tools/plusfull-golden`で生成したpyopenjtalk-plusの解析結果と、AquesTalk風記法で一致するか。
