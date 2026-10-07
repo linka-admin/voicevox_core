@@ -68,6 +68,71 @@ impl assert_cdylib::TestCase for TestCase {
             frame_length,
         );
 
+        static INTERROGATIVE_QUERY: &CStr = indoc! {cr#"
+            {
+                "accent_phrases": [
+                    {
+                        "moras": [
+                            {
+                                "text": "ア",
+                                "vowel": "a",
+                                "vowel_length": 4.4,
+                                "pitch": 5.0
+                            }
+                        ],
+                        "accent": 1,
+                        "is_interrogative": true
+                    }
+                ],
+                "speedScale": 1.2,
+                "pitchScale": 0.0,
+                "intonationScale": 1.0,
+                "volumeScale": 1.0,
+                "prePhonemeLength": 3.3,
+                "postPhonemeLength": 5.5,
+                "outputSamplingRate": 24000,
+                "outputStereo": false
+            }
+        "#};
+
+        // SAFETY: The safety contract must be upheld by the caller.
+        let default_options =
+            unsafe { lib.voicevox_make_default_audio_query_frame_length_options() };
+        std::assert_eq!(
+            c_api::VoicevoxInterrogativeUpspeakStyle_VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE,
+            default_options.interrogative_upspeak_style,
+        );
+
+        let interrogative_frame_length = |style| {
+            let mut frame_length = MaybeUninit::uninit();
+            let options = c_api::VoicevoxAudioQueryFrameLengthOptions {
+                interrogative_upspeak_style: style,
+                ..default_options
+            };
+            unsafe {
+                // SAFETY: The safety contract must be upheld by the caller.
+                assert_ok(lib.voicevox_audio_query_frame_length(
+                    INTERROGATIVE_QUERY.as_ptr(),
+                    options,
+                    frame_length.as_mut_ptr(),
+                ));
+                // SAFETY: `voicevox_audio_query_frame_length` initializes `frame_length` if succeeded.
+                frame_length.assume_init()
+            }
+        };
+
+        std::assert_eq!(
+            to_frame_length(3.3) + to_frame_length(4.4) + to_frame_length(0.15) + to_frame_length(5.5),
+            interrogative_frame_length(
+                c_api::VoicevoxInterrogativeUpspeakStyle_VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_APPEND_MORA,
+            ),
+        );
+        std::assert_eq!(
+            to_frame_length(3.3) + to_frame_length(4.4 + 0.06) + to_frame_length(5.5),
+            interrogative_frame_length(
+                c_api::VoicevoxInterrogativeUpspeakStyle_VOICEVOX_INTERROGATIVE_UPSPEAK_STYLE_GLIDE,
+            ),
+        );
         return Ok(());
 
         fn assert_ok(result_code: VoicevoxResultCode) {

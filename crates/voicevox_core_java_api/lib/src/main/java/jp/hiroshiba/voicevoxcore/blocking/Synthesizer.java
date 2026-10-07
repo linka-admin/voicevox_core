@@ -13,6 +13,7 @@ import jp.hiroshiba.voicevoxcore.AudioFeature;
 import jp.hiroshiba.voicevoxcore.AudioQuery;
 import jp.hiroshiba.voicevoxcore.CharacterMeta;
 import jp.hiroshiba.voicevoxcore.FrameAudioQuery;
+import jp.hiroshiba.voicevoxcore.InterrogativeUpspeakStyle;
 import jp.hiroshiba.voicevoxcore.OnExistingVoiceModelId;
 import jp.hiroshiba.voicevoxcore.Score;
 import jp.hiroshiba.voicevoxcore.StyleType;
@@ -521,21 +522,37 @@ public final class Synthesizer {
 
   @Nonnull
   private native byte[] rsSynthesis(
-      String queryJson, int styleId, boolean enableInterrogativeUpspeak) throws RunModelException;
+      String queryJson,
+      int styleId,
+      boolean enableInterrogativeUpspeak,
+      InterrogativeUpspeakStyle interrogativeUpspeakStyle)
+      throws RunModelException;
 
   private native AudioFeature rsCreateAudioFeature(
-      String queryJson, int styleId, boolean enableInterrogativeUpspeak) throws RunModelException;
+      String queryJson,
+      int styleId,
+      boolean enableInterrogativeUpspeak,
+      InterrogativeUpspeakStyle interrogativeUpspeakStyle)
+      throws RunModelException;
 
   @Nonnull
   private native byte[] rsRender(AudioFeature audioFeature, int startInclusive, int endExclusive)
       throws RunModelException;
 
   @Nonnull
-  private native byte[] rsTtsFromKana(String kana, int styleId, boolean enableInterrogativeUpspeak)
+  private native byte[] rsTtsFromKana(
+      String kana,
+      int styleId,
+      boolean enableInterrogativeUpspeak,
+      InterrogativeUpspeakStyle interrogativeUpspeakStyle)
       throws RunModelException;
 
   @Nonnull
-  private native byte[] rsTts(String text, int styleId, boolean enableInterrogativeUpspeak)
+  private native byte[] rsTts(
+      String text,
+      int styleId,
+      boolean enableInterrogativeUpspeak,
+      InterrogativeUpspeakStyle interrogativeUpspeakStyle)
       throws RunModelException;
 
   @Nonnull
@@ -656,6 +673,7 @@ public final class Synthesizer {
     private AudioQuery audioQuery;
     private int styleId;
     private boolean interrogativeUpspeak; // FIXME: デフォルトで`false`になってしまっている！
+    private InterrogativeUpspeakStyle interrogativeUpspeakStyle = InterrogativeUpspeakStyle.GLIDE;
 
     private SynthesisConfigurator(Synthesizer synthesizer, AudioQuery audioQuery, int styleId) {
       if (!Utils.isU32(styleId)) {
@@ -680,6 +698,24 @@ public final class Synthesizer {
     }
 
     /**
+     * 疑問文の語尾の音高の上げ方。デフォルトは{@link InterrogativeUpspeakStyle#GLIDE}。
+     *
+     * <p>{@link #interrogativeUpspeak(boolean) interrogativeUpspeak}が{@code true}のときのみ効果がある。
+     *
+     * @param interrogativeUpspeakStyle 疑問文の語尾の音高の上げ方。
+     * @return {@link SynthesisConfigurator}。
+     */
+    @Nonnull
+    public SynthesisConfigurator interrogativeUpspeakStyle(
+        InterrogativeUpspeakStyle interrogativeUpspeakStyle) {
+      if (interrogativeUpspeakStyle == null) {
+        throw new NullPointerException("interrogativeUpspeakStyle");
+      }
+      this.interrogativeUpspeakStyle = interrogativeUpspeakStyle;
+      return this;
+    }
+
+    /**
      * {@link AudioQuery} から音声合成する。
      *
      * @return 音声データ。
@@ -691,7 +727,8 @@ public final class Synthesizer {
         throw new IllegalArgumentException("styleId");
       }
       String queryJson = Convert.jsonFromQueryLike(this.audioQuery, "不正なAudioQueryです");
-      return synthesizer.rsSynthesis(queryJson, this.styleId, this.interrogativeUpspeak);
+      return synthesizer.rsSynthesis(
+          queryJson, this.styleId, this.interrogativeUpspeak, this.interrogativeUpspeakStyle);
     }
   }
 
@@ -701,6 +738,7 @@ public final class Synthesizer {
     private AudioQuery audioQuery;
     private int styleId;
     private boolean interrogativeUpspeak; // FIXME: デフォルトで`false`になってしまっている！
+    private InterrogativeUpspeakStyle interrogativeUpspeakStyle = InterrogativeUpspeakStyle.GLIDE;
 
     private CreateAudioFeatureConfigurator(
         Synthesizer synthesizer, AudioQuery audioQuery, int styleId) {
@@ -725,6 +763,24 @@ public final class Synthesizer {
     }
 
     /**
+     * 疑問文の語尾の音高の上げ方。デフォルトは{@link InterrogativeUpspeakStyle#GLIDE}。
+     *
+     * <p>{@link #interrogativeUpspeak(boolean) interrogativeUpspeak}が{@code true}のときのみ効果がある。
+     *
+     * @param interrogativeUpspeakStyle 疑問文の語尾の音高の上げ方。
+     * @return {@link CreateAudioFeatureConfigurator}。
+     */
+    @Nonnull
+    public CreateAudioFeatureConfigurator interrogativeUpspeakStyle(
+        InterrogativeUpspeakStyle interrogativeUpspeakStyle) {
+      if (interrogativeUpspeakStyle == null) {
+        throw new NullPointerException("interrogativeUpspeakStyle");
+      }
+      this.interrogativeUpspeakStyle = interrogativeUpspeakStyle;
+      return this;
+    }
+
+    /**
      * 音声合成用の中間表現を生成する。
      *
      * @return 音声合成用の中間表現。
@@ -733,7 +789,8 @@ public final class Synthesizer {
     @Nonnull
     public AudioFeature perform() throws RunModelException {
       String queryJson = Convert.jsonFromQueryLike(this.audioQuery, "不正なAudioQueryです");
-      return synthesizer.rsCreateAudioFeature(queryJson, this.styleId, this.interrogativeUpspeak);
+      return synthesizer.rsCreateAudioFeature(
+          queryJson, this.styleId, this.interrogativeUpspeak, this.interrogativeUpspeakStyle);
     }
   }
 
@@ -743,6 +800,7 @@ public final class Synthesizer {
     private String kana;
     private int styleId;
     private boolean interrogativeUpspeak; // FIXME: デフォルトで`false`になってしまっている！
+    private InterrogativeUpspeakStyle interrogativeUpspeakStyle = InterrogativeUpspeakStyle.GLIDE;
 
     private TtsFromKanaConfigurator(Synthesizer synthesizer, String kana, int styleId) {
       if (!Utils.isU32(styleId)) {
@@ -766,6 +824,24 @@ public final class Synthesizer {
     }
 
     /**
+     * 疑問文の語尾の音高の上げ方。デフォルトは{@link InterrogativeUpspeakStyle#GLIDE}。
+     *
+     * <p>{@link #interrogativeUpspeak(boolean) interrogativeUpspeak}が{@code true}のときのみ効果がある。
+     *
+     * @param interrogativeUpspeakStyle 疑問文の語尾の音高の上げ方。
+     * @return {@link TtsFromKanaConfigurator}。
+     */
+    @Nonnull
+    public TtsFromKanaConfigurator interrogativeUpspeakStyle(
+        InterrogativeUpspeakStyle interrogativeUpspeakStyle) {
+      if (interrogativeUpspeakStyle == null) {
+        throw new NullPointerException("interrogativeUpspeakStyle");
+      }
+      this.interrogativeUpspeakStyle = interrogativeUpspeakStyle;
+      return this;
+    }
+
+    /**
      * {@link AudioQuery} から音声合成する。
      *
      * @return 音声データ。
@@ -776,7 +852,8 @@ public final class Synthesizer {
       if (!Utils.isU32(styleId)) {
         throw new IllegalArgumentException("styleId");
       }
-      return synthesizer.rsTtsFromKana(this.kana, this.styleId, this.interrogativeUpspeak);
+      return synthesizer.rsTtsFromKana(
+          this.kana, this.styleId, this.interrogativeUpspeak, this.interrogativeUpspeakStyle);
     }
   }
 
@@ -786,6 +863,7 @@ public final class Synthesizer {
     private String text;
     private int styleId;
     private boolean interrogativeUpspeak; // FIXME: デフォルトで`false`になってしまっている！
+    private InterrogativeUpspeakStyle interrogativeUpspeakStyle = InterrogativeUpspeakStyle.GLIDE;
 
     private TtsConfigurator(Synthesizer synthesizer, String text, int styleId) {
       if (!Utils.isU32(styleId)) {
@@ -809,6 +887,24 @@ public final class Synthesizer {
     }
 
     /**
+     * 疑問文の語尾の音高の上げ方。デフォルトは{@link InterrogativeUpspeakStyle#GLIDE}。
+     *
+     * <p>{@link #interrogativeUpspeak(boolean) interrogativeUpspeak}が{@code true}のときのみ効果がある。
+     *
+     * @param interrogativeUpspeakStyle 疑問文の語尾の音高の上げ方。
+     * @return {@link TtsConfigurator}。
+     */
+    @Nonnull
+    public TtsConfigurator interrogativeUpspeakStyle(
+        InterrogativeUpspeakStyle interrogativeUpspeakStyle) {
+      if (interrogativeUpspeakStyle == null) {
+        throw new NullPointerException("interrogativeUpspeakStyle");
+      }
+      this.interrogativeUpspeakStyle = interrogativeUpspeakStyle;
+      return this;
+    }
+
+    /**
      * {@link AudioQuery} から音声合成する。
      *
      * @return 音声データ。
@@ -819,7 +915,8 @@ public final class Synthesizer {
       if (!Utils.isU32(styleId)) {
         throw new IllegalArgumentException("styleId");
       }
-      return synthesizer.rsTts(this.text, this.styleId, this.interrogativeUpspeak);
+      return synthesizer.rsTts(
+          this.text, this.styleId, this.interrogativeUpspeak, this.interrogativeUpspeakStyle);
     }
   }
 }

@@ -1,6 +1,8 @@
 use std::{borrow::Cow, ptr};
 
-use crate::common::{JavaApiResult, query_from_json, throw_if_err};
+use crate::common::{
+    JavaApiResult, interrogative_upspeak_style_from_java, query_from_json, throw_if_err,
+};
 use easy_ext::ext;
 use jni::{
     JNIEnv,
@@ -35,12 +37,16 @@ extern "system" fn Java_jp_hiroshiba_voicevoxcore_AudioQuery_rsFrameLength(
     env: JNIEnv<'_>,
     this: JObject<'_>,
     enable_interrogative_upspeak: jboolean,
+    interrogative_upspeak_style: JObject<'_>,
 ) -> jlong {
     throw_if_err(env, 0, |env| {
+        let interrogative_upspeak_style =
+            interrogative_upspeak_style_from_java(env, &interrogative_upspeak_style)?;
         let query = AudioQuery::from_java(env, this)?;
         Ok(query
             .frame_length()
             .enable_interrogative_upspeak(enable_interrogative_upspeak != 0)
+            .interrogative_upspeak_style(interrogative_upspeak_style)
             .calculate()
             .0
             .try_into()

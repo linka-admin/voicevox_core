@@ -337,10 +337,13 @@ fn _audio_query_to_json(
 fn audio_query_frame_length(
     #[pyo3(from_py_with = convert::from_audio_query)] audio_query: AudioQuery,
     enable_interrogative_upspeak: bool,
+    #[pyo3(from_py_with = convert::from_interrogative_upspeak_style)]
+    interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
 ) -> usize {
     audio_query
         .frame_length()
         .enable_interrogative_upspeak(enable_interrogative_upspeak)
+        .interrogative_upspeak_style(interrogative_upspeak_style)
         .calculate()
         .0
 }
@@ -1142,12 +1145,15 @@ mod blocking {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         fn create_audio_feature(
             &self,
             #[pyo3(from_py_with = crate::convert::from_audio_query)] audio_query: AudioQuery,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             py: Python<'_>,
         ) -> PyResult<AudioFeature> {
             let audio = self
@@ -1155,6 +1161,7 @@ mod blocking {
                 .read()?
                 .create_audio_feature(&audio_query, StyleId::new(style_id))
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .perform()
                 .into_py_result(py)?;
             Ok(AudioFeature { audio })
@@ -1171,18 +1178,22 @@ mod blocking {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         fn synthesis(
             &self,
             #[pyo3(from_py_with = crate::convert::from_audio_query)] audio_query: AudioQuery,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             py: Python<'_>,
         ) -> PyResult<Vec<u8>> {
             self.synthesizer
                 .read()?
                 .synthesis(&audio_query, StyleId::new(style_id))
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .perform()
                 .into_py_result(py)
         }
@@ -1195,6 +1206,7 @@ mod blocking {
             segment_length = AudioSegmentation::default().segment_length_in_secs,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         fn streaming_synthesis(
             slf: Py<Self>,
@@ -1203,10 +1215,13 @@ mod blocking {
             start_offset: f64,
             segment_length: f64,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             py: Python<'_>,
         ) -> PyResult<SynthesisStream> {
             crate::convert::validate_audio_segmentation(
                 enable_interrogative_upspeak,
+                interrogative_upspeak_style,
                 start_offset,
                 segment_length,
                 &audio_query,
@@ -1218,6 +1233,7 @@ mod blocking {
                     .enable_interrogative_upspeak(enable_interrogative_upspeak)
                     .start_offset(start_offset)
                     .segment_length(segment_length)
+                    .interrogative_upspeak_style(interrogative_upspeak_style)
                     .perform()
             })
             .into_py_result(py)?;
@@ -1237,12 +1253,15 @@ mod blocking {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         fn tts_from_kana(
             &self,
             kana: &str,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             py: Python<'_>,
         ) -> PyResult<Vec<u8>> {
             let style_id = StyleId::new(style_id);
@@ -1250,6 +1269,7 @@ mod blocking {
                 .read()?
                 .tts_from_kana(kana, style_id)
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .perform()
                 .into_py_result(py)
         }
@@ -1260,12 +1280,15 @@ mod blocking {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         fn tts(
             &self,
             text: &str,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             py: Python<'_>,
         ) -> PyResult<Vec<u8>> {
             let style_id = StyleId::new(style_id);
@@ -1273,6 +1296,7 @@ mod blocking {
                 .read()?
                 .tts(text, style_id)
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .perform()
                 .into_py_result(py)
         }
@@ -2050,18 +2074,22 @@ mod asyncio {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         async fn create_audio_feature(
             &self,
             #[pyo3(from_py_with = crate::convert::from_audio_query)] audio_query: AudioQuery,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
         ) -> PyResult<AudioFeature> {
             let audio = self
                 .synthesizer
                 .read()?
                 .create_audio_feature(&audio_query, StyleId::new(style_id))
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .perform()
                 .await;
             let audio = Python::attach(|py| audio.into_py_result(py))?;
@@ -2080,6 +2108,7 @@ mod asyncio {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
             cancellable = voicevox_core::__internal::interop::DEFAULT_HEAVY_INFERENCE_CANCELLABLE,
         ))]
         async fn synthesis(
@@ -2087,6 +2116,8 @@ mod asyncio {
             #[pyo3(from_py_with = crate::convert::from_audio_query)] audio_query: AudioQuery,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             cancellable: bool,
         ) -> PyResult<Vec<u8>> {
             let synthesizer = self.synthesizer.clone();
@@ -2094,6 +2125,7 @@ mod asyncio {
                 .read()?
                 .synthesis(&audio_query, StyleId::new(style_id))
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .cancellable(cancellable)
                 .perform()
                 .await;
@@ -2108,6 +2140,7 @@ mod asyncio {
             segment_length = AudioSegmentation::default().segment_length_in_secs,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
         ))]
         async fn streaming_synthesis(
             slf: Py<Self>,
@@ -2116,9 +2149,12 @@ mod asyncio {
             start_offset: f64,
             segment_length: f64,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
         ) -> PyResult<SynthesisStream> {
             crate::convert::validate_audio_segmentation(
                 enable_interrogative_upspeak,
+                interrogative_upspeak_style,
                 start_offset,
                 segment_length,
                 &audio_query,
@@ -2131,6 +2167,7 @@ mod asyncio {
                         .enable_interrogative_upspeak(enable_interrogative_upspeak)
                         .start_offset(start_offset)
                         .segment_length(segment_length)
+                        .interrogative_upspeak_style(interrogative_upspeak_style)
                         .perform()
                         .await
                 })
@@ -2153,6 +2190,7 @@ mod asyncio {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
             cancellable = voicevox_core::__internal::interop::DEFAULT_HEAVY_INFERENCE_CANCELLABLE,
         ))]
         async fn tts_from_kana(
@@ -2160,6 +2198,8 @@ mod asyncio {
             kana: String,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             cancellable: bool,
         ) -> PyResult<Vec<u8>> {
             let style_id = StyleId::new(style_id);
@@ -2168,6 +2208,7 @@ mod asyncio {
                 .read()?
                 .tts_from_kana(&kana, style_id)
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .cancellable(cancellable)
                 .perform()
                 .await;
@@ -2180,6 +2221,7 @@ mod asyncio {
             *,
             enable_interrogative_upspeak =
                 voicevox_core::__internal::interop::DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK,
+            interrogative_upspeak_style = Default::default(),
             cancellable = voicevox_core::__internal::interop::DEFAULT_HEAVY_INFERENCE_CANCELLABLE,
         ))]
         async fn tts(
@@ -2187,6 +2229,8 @@ mod asyncio {
             text: String,
             style_id: u32,
             enable_interrogative_upspeak: bool,
+            #[pyo3(from_py_with = crate::convert::from_interrogative_upspeak_style)]
+            interrogative_upspeak_style: voicevox_core::InterrogativeUpspeakStyle,
             cancellable: bool,
         ) -> PyResult<Vec<u8>> {
             let style_id = StyleId::new(style_id);
@@ -2195,6 +2239,7 @@ mod asyncio {
                 .read()?
                 .tts(&text, style_id)
                 .enable_interrogative_upspeak(enable_interrogative_upspeak)
+                .interrogative_upspeak_style(interrogative_upspeak_style)
                 .cancellable(cancellable)
                 .perform()
                 .await;
