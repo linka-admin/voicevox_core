@@ -124,7 +124,7 @@ zip = "0.6.3"
 # pyopenjtalk-plus相当のテキスト解析のため、tsukumijima/open_jtalkをビルドするフォークを使う
 [workspace.dependencies.open_jtalk]
 git = "https://github.com/linka-admin/open_jtalk-rs.git"
-rev = "ee9a6a0ecb034d69a213354a9f9064d4630bfb39"
+rev = "458153ac07467029208fdb5aac31c629914cc553"
 
 # FIXME: iOS対応のpull request(https://github.com/wesleywiser/process_path/pull/16)がマージされる見込みが無いため
 [workspace.dependencies.process_path]
