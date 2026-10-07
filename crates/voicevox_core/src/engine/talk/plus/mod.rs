@@ -22,6 +22,7 @@ mod mecab_features;
 mod number_boundary;
 mod odori;
 mod reading;
+mod unknown_kanji;
 mod unknown_katakana;
 
 use open_jtalk::NjdFeature;
@@ -54,8 +55,7 @@ pub(super) fn apply_njd_rules_before_digit(
 /// 相当するが、次の処理は行わない。
 ///
 /// - ONNXモデルによる「何」の読みの推定（`predict_nani_reading`）
-/// - Sudachiによる読みの補正（`modify_kanji_yomi`）
-/// - 辞書にない漢字への読みの付与（`read_unknown_kanji`）
+/// - Sudachiによる読みの補正（`modify_kanji_yomi`と、`read_unknown_kanji`の語単位の読み）
 /// - marineによるアクセントの推定
 /// - ユーザー辞書の読み保護
 ///
@@ -71,6 +71,7 @@ pub(super) fn apply_postprocessing(
     let features = context_reading::modify_context_reading(features);
     let features = reading::modify_old_province_yomi(features);
     let features = loanword_kana::restore_loanword_kana(features);
+    let features = unknown_kanji::read_unknown_kanji(features);
     // 読みを確定したあとで接頭辞の後ろのアクセント句を分け、分けたあとの句でアクセントを補正する
     let features = accent::split_prefix_accent_phrase(features);
     let features = accent::retreat_acc_nuc(features);
