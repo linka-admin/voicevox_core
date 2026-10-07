@@ -25,7 +25,8 @@ pyopenjtalk.run_frontend(text)        # NJD features (run_marine=False, other op
 | `build/dictionary/` | System dictionary exported by `--export-dict` (git-ignored, ~210 MB) |
 | `corpus/conversation.txt` | 35 conversational sentences (20 general + 15 "ojousama" style) |
 | `corpus/ita.txt` | ITA corpus, 424 sentences (EMOTION100 001-100, then RECITATION324 001-324) |
-| `golden/{conversation,ita}.tsv` | `text<TAB>kana`, one row per corpus line, no header |
+| `corpus/postprocessing.txt` | 243 phrases exercising the post-processing rules (`apply_postprocessing`), taken from pyopenjtalk-plus' `tests/test_postprocessing.py` |
+| `golden/{conversation,ita,postprocessing}.tsv` | `text<TAB>kana`, one row per corpus line, no header |
 
 ## Pinned versions
 
@@ -94,6 +95,7 @@ uv run --locked generate.py --export-dict build/dictionary
 # 2. Generate the goldens with it.
 uv run --locked generate.py --dict-dir build/dictionary corpus/conversation.txt -o golden/conversation.tsv
 uv run --locked generate.py --dict-dir build/dictionary corpus/ita.txt -o golden/ita.tsv
+uv run --locked generate.py --dict-dir build/dictionary corpus/postprocessing.txt -o golden/postprocessing.tsv
 ```
 
 `--export-dict` refuses to overwrite an existing directory and checks that the
@@ -115,6 +117,7 @@ python3 -m venv .venv
 .venv/bin/python -I generate.py --export-dict build/dictionary
 .venv/bin/python -I generate.py --dict-dir build/dictionary corpus/conversation.txt -o golden/conversation.tsv
 .venv/bin/python -I generate.py --dict-dir build/dictionary corpus/ita.txt -o golden/ita.tsv
+.venv/bin/python -I generate.py --dict-dir build/dictionary corpus/postprocessing.txt -o golden/postprocessing.tsv
 ```
 
 (A non-git install has no recorded commit, so the commit check of
@@ -193,5 +196,7 @@ fewer devoiced moras around ツ/チ, e.g. ドクリ_ツシヨオ -> ドクリツ
   情報処理学会研究報告, vol. 2021-MUS-131, no. 31, pp. 1-6, 2021.
 - `corpus/conversation.txt`: short example sentences prepared for this
   comparison (not taken from a third-party corpus).
+- `corpus/postprocessing.txt`: inputs of the post-processing tests of
+  pyopenjtalk-plus (MIT), `tests/test_postprocessing.py` at the pinned commit.
 - The golden kana are output of pyopenjtalk-plus (MIT; see its repository for
   the licenses of the bundled dictionary and models) and are test data only.
