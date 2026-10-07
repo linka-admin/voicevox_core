@@ -494,17 +494,21 @@ mod tests {
     /// `tools/plusfull-golden`で生成したpyopenjtalk-plusの解析結果と、AquesTalk風記法で一致するか。
     ///
     /// pyopenjtalk-plusのシステム辞書を環境変数`PLUSFULL_DIC_DIR`で指定して実行する。
+    /// 期待値のディレクトリは環境変数`PLUSFULL_GOLDEN_DIR`で差し替えられる。
     #[rstest]
     #[case("conversation")]
     #[case("ita")]
     #[ignore = "requires pyopenjtalk-plus dictionary via `PLUSFULL_DIC_DIR`"]
     fn matches_pyopenjtalk_plus_golden(#[case] corpus: &str) {
         let dic_dir = std::env::var("PLUSFULL_DIC_DIR").expect("`PLUSFULL_DIC_DIR` is not set");
-        let golden = std::fs::read_to_string(format!(
-            "{}/../../tools/plusfull-golden/golden/{corpus}.tsv",
-            env!("CARGO_MANIFEST_DIR"),
-        ))
-        .unwrap();
+        // 後処理を含まない参照データなどと比べるため、`PLUSFULL_GOLDEN_DIR`で差し替えられる
+        let golden_dir = std::env::var("PLUSFULL_GOLDEN_DIR").unwrap_or_else(|_| {
+            format!(
+                "{}/../../tools/plusfull-golden/golden",
+                env!("CARGO_MANIFEST_DIR"),
+            )
+        });
+        let golden = std::fs::read_to_string(format!("{golden_dir}/{corpus}.tsv")).unwrap();
         let open_jtalk = crate::blocking::OpenJtalk::new(dic_dir).unwrap();
 
         let mismatches = golden
