@@ -327,82 +327,82 @@ mod tests {
             // sil (無音)
             String::from(
                 "xx^xx-sil+k=o/A:xx+xx+xx/B:xx-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx",
-            ) + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:5_5%0_xx_xx/H:xx_xx/I:xx-xx"
+            ) + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:5_5%0_0_xx/H:xx_xx/I:xx-xx"
                 + "@xx+xx&xx-xx|xx+xx/J:1_5/K:2+2-9",
             // k
             String::from("xx^sil-k+o=N/A:-4+1+5/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // o
             String::from("sil^k-o+N=n/A:-4+1+5/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // N (ん)
             String::from("k^o-N+n=i/A:-3+2+4/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // n
             String::from("o^N-n+i=ch/A:-2+3+3/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // i
             String::from("N^n-i+ch=i/A:-2+3+3/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // ch
             String::from("n^i-ch+i=w/A:-1+4+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // i
             String::from("i^ch-i+w=a/A:-1+4+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // w
             String::from("ch^i-w+a=pau/A:0+5+1/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // a
             String::from("i^w-a+pau=h/A:0+5+1/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx")
-                + "/F:5_5#0_xx@1_1|1_5/G:4_1%0_xx_0/H:xx_xx/I:1-5"
+                + "/F:5_5#0_0@1_1|1_5/G:4_1%0_0_0/H:xx_xx/I:1-5"
                 + "@1+2&1-2|1+9/J:1_4/K:2+2-9",
             // pau (読点)
-            String::from("w^a-pau+h=i/A:xx+xx+xx/B:09-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:5_5!0_xx-xx")
-                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:4_1%0_xx_xx/H:1_5/I:xx-xx"
+            String::from("w^a-pau+h=i/A:xx+xx+xx/B:09-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:5_5!0_0-xx")
+                + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:4_1%0_0_xx/H:1_5/I:xx-xx"
                 + "@xx+xx&xx-xx|xx+xx/J:1_4/K:2+2-9",
             // h
-            String::from("a^pau-h+i=h/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("a^pau-h+i=h/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // i
-            String::from("pau^h-i+h=o/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("pau^h-i+h=o/A:0+1+4/B:09-xx_xx/C:09_xx+xx/D:22+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // h
-            String::from("h^i-h+o=d/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("h^i-h+o=d/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // o
-            String::from("i^h-o+d=e/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("i^h-o+d=e/A:1+2+3/B:09-xx_xx/C:22_xx+xx/D:10+7_2/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // d
-            String::from("h^o-d+e=s/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("h^o-d+e=s/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // e
-            String::from("o^d-e+s=U/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("o^d-e+s=U/A:2+3+2/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // s
-            String::from("d^e-s+U=sil/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("d^e-s+U=sil/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // U (無声母音)
-            String::from("e^s-U+sil=xx/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_xx-0")
-                + "/F:4_1#0_xx@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
+            String::from("e^s-U+sil=xx/A:3+4+1/B:22-xx_xx/C:10_7+2/D:xx+xx_xx/E:5_5!0_0-0")
+                + "/F:4_1#0_0@1_1|1_4/G:xx_xx%xx_xx_xx/H:1_5/I:1-4"
                 + "@2+1&2-1|6+4/J:xx_xx/K:2+2-9",
             // sil (無音)
-            String::from("s^U-sil+xx=xx/A:xx+xx+xx/B:10-7_2/C:xx_xx+xx/D:xx+xx_xx/E:4_1!0_xx-xx")
+            String::from("s^U-sil+xx=xx/A:xx+xx+xx/B:10-7_2/C:xx_xx+xx/D:xx+xx_xx/E:4_1!0_0-xx")
                 + "/F:xx_xx#xx_xx@xx_xx|xx_xx/G:xx_xx%xx_xx_xx/H:1_4/I:xx-xx"
                 + "@xx+xx&xx-xx|xx+xx/J:xx_xx/K:2+2-9",
         ]
@@ -437,5 +437,42 @@ mod tests {
             let result = open_jtalk.0.extract_fullcontext(text);
             assert_debug_fmt_eq!(expected, result);
         }
+    }
+
+    /// `tools/plusfull-golden`で生成したpyopenjtalk-plusの解析結果と、AquesTalk風記法で一致するか。
+    ///
+    /// pyopenjtalk-plusのシステム辞書を環境変数`PLUSFULL_DIC_DIR`で指定して実行する。
+    #[rstest]
+    #[case("conversation")]
+    #[case("ita")]
+    #[ignore = "requires pyopenjtalk-plus dictionary via `PLUSFULL_DIC_DIR`"]
+    fn matches_pyopenjtalk_plus_golden(#[case] corpus: &str) {
+        let dic_dir = std::env::var("PLUSFULL_DIC_DIR").expect("`PLUSFULL_DIC_DIR` is not set");
+        let golden = std::fs::read_to_string(format!(
+            "{}/../../tools/plusfull-golden/golden/{corpus}.tsv",
+            env!("CARGO_MANIFEST_DIR"),
+        ))
+        .unwrap();
+        let open_jtalk = crate::blocking::OpenJtalk::new(dic_dir).unwrap();
+
+        let mismatches = golden
+            .lines()
+            .filter_map(|line| line.split_once('\t'))
+            .filter_map(|(text, expected)| {
+                let actual = super::super::extract_full_context_label(&open_jtalk, text)
+                    .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+                    .unwrap_or_else(|e| format!("<error: {e}>"));
+                (actual != expected)
+                    .then(|| format!("{text}\n  expected: {expected}\n  actual:   {actual}"))
+            })
+            .collect::<Vec<_>>();
+
+        let total = golden.lines().count();
+        eprintln!(
+            "{corpus}: {}/{total} matched\n{}",
+            total - mismatches.len(),
+            mismatches.join("\n"),
+        );
+        assert!(mismatches.is_empty());
     }
 }

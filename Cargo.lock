@@ -2794,7 +2794,7 @@ dependencies = [
 [[package]]
 name = "open_jtalk"
 version = "0.1.25"
-source = "git+https://github.com/VOICEVOX/open_jtalk-rs.git?rev=7c87b4227bb005b439a3ad473b48ce8975829576#7c87b4227bb005b439a3ad473b48ce8975829576"
+source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=248a6792446b6a1574b3d6532ac80582ce4d7110#248a6792446b6a1574b3d6532ac80582ce4d7110"
 dependencies = [
  "camino",
  "open_jtalk-sys",
@@ -2804,7 +2804,7 @@ dependencies = [
 [[package]]
 name = "open_jtalk-sys"
 version = "0.16.111"
-source = "git+https://github.com/VOICEVOX/open_jtalk-rs.git?rev=7c87b4227bb005b439a3ad473b48ce8975829576#7c87b4227bb005b439a3ad473b48ce8975829576"
+source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=248a6792446b6a1574b3d6532ac80582ce4d7110#248a6792446b6a1574b3d6532ac80582ce4d7110"
 dependencies = [
  "bindgen 0.70.1",
  "cmake",
