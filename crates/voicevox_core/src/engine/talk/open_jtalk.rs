@@ -498,6 +498,7 @@ mod tests {
     #[rstest]
     #[case("conversation")]
     #[case("ita")]
+    #[case("postprocessing")]
     #[ignore = "requires pyopenjtalk-plus dictionary via `PLUSFULL_DIC_DIR`"]
     fn matches_pyopenjtalk_plus_golden(#[case] corpus: &str) {
         let dic_dir = std::env::var("PLUSFULL_DIC_DIR").expect("`PLUSFULL_DIC_DIR` is not set");
@@ -511,6 +512,7 @@ mod tests {
         let golden = std::fs::read_to_string(format!("{golden_dir}/{corpus}.tsv")).unwrap();
         let open_jtalk = crate::blocking::OpenJtalk::new(dic_dir).unwrap();
 
+        let start = std::time::Instant::now();
         let mismatches = golden
             .lines()
             .filter_map(|line| line.split_once('\t'))
@@ -523,10 +525,12 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
+        let elapsed = start.elapsed();
         let total = golden.lines().count();
         eprintln!(
-            "{corpus}: {}/{total} matched\n{}",
+            "{corpus}: {}/{total} matched ({:.2} ms/sentence)\n{}",
             total - mismatches.len(),
+            elapsed.as_secs_f64() * 1000.0 / total as f64,
             mismatches.join("\n"),
         );
         assert!(mismatches.is_empty());
