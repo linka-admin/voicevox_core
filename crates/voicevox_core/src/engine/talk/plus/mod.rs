@@ -19,6 +19,7 @@ mod kana;
 mod known_symbols;
 mod loanword_kana;
 mod mecab_features;
+mod multi_read_kanji;
 mod number_boundary;
 mod odori;
 mod reading;
@@ -67,6 +68,8 @@ pub(super) fn apply_postprocessing(
 ) -> anyhow::Result<Vec<NjdFeature>> {
     // フィラーのアクセントは読み変更より先に補正する
     let features = accent::modify_filler_accent(features);
+    // pyopenjtalk-plusでSudachiによる読みの上書き（`modify_kanji_yomi`）が担う位置
+    let features = multi_read_kanji::release_multi_read_kanji_devoicing(features);
     let features = reading::suppress_unnatural_auxiliary_u_long_vowel(features);
     let features = context_reading::modify_context_reading(features);
     let features = reading::modify_old_province_yomi(features);
