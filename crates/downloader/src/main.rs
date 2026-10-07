@@ -78,11 +78,13 @@ const MODELS_DIR_NAME: &str = "vvms";
 const MODELS_TERMS_NAME: &str = "VOICEVOX 音声モデル 利用規約";
 const MODELS_TERMS_FILE: &str = "TERMS.txt";
 
+// pyopenjtalk-plusのシステム辞書をビルドしたもの。詳細は`tools/plusfull-golden`を参照。
 static OPEN_JTALK_DIC_REPO: LazyLock<RepoName> = LazyLock::new(|| RepoName {
-    owner: "r9y9".to_owned(),
+    owner: "linka-admin".to_owned(),
     repo: "open_jtalk".to_owned(),
 });
-static OPEN_JTALK_DIC_VERSION: LazyLock<Version> = LazyLock::new(|| "1.11.1".parse().unwrap());
+static OPEN_JTALK_DIC_VERSION: LazyLock<Version> = LazyLock::new(|| "0.1.0".parse().unwrap());
+const OPEN_JTALK_DIC_TAG_PREFIX: &str = "plus-dic-";
 const OPEN_JTALK_DIC_FILE: &str = "open_jtalk_dic_utf_8-1.11.tar.gz";
 
 static PROGRESS_STYLE0: LazyLock<ProgressStyle> =
@@ -413,7 +415,7 @@ impl DownloadTarget {
             Self::Onnxruntime => "(VOICEVOX) ONNX Runtime。",
             Self::AdditionalLibraries => "`--devices`で指定したDirectMLやCUDA。",
             Self::Models => "VOICEVOX音声モデル（VVMファイル）。",
-            Self::Dict => "Open JTalkのシステム辞書。",
+            Self::Dict => "Open JTalkのシステム辞書（pyopenjtalk-plus版）。",
         }
     }
 
@@ -720,7 +722,7 @@ async fn main() -> anyhow::Result<()> {
             octocrab,
             &OPEN_JTALK_DIC_REPO,
             Either::Left(&OPEN_JTALK_DIC_VERSION),
-            "v",
+            OPEN_JTALK_DIC_TAG_PREFIX,
             None,
             |_, _| Ok(OPEN_JTALK_DIC_FILE.to_owned()),
         )
