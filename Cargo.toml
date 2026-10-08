@@ -121,6 +121,11 @@ waveadapter = "0.3.0"
 windows = "0.43.0"
 zip = "0.6.3"
 
+# 読みが不明な英単語をカタカナ英語として読むため。crates.ioには公開されていない
+[workspace.dependencies.kanalizer]
+git = "https://github.com/VOICEVOX/kanalizer.git"
+rev = "a65240e586cbf3cbbb46ea413df0fe9128166a49" # 0.1.1
+
 # pyopenjtalk-plus相当のテキスト解析のため、tsukumijima/open_jtalkをビルドするフォークを使う
 [workspace.dependencies.open_jtalk]
 git = "https://github.com/linka-admin/open_jtalk-rs.git"

@@ -14,7 +14,7 @@ use tempfile::NamedTempFile;
 
 use crate::error::ErrorRepr;
 
-use super::plus;
+use super::{katakana_english, plus};
 
 #[derive(thiserror::Error, Debug)]
 #[error("`{function}`の実行が失敗しました")]
@@ -142,6 +142,8 @@ impl FullcontextExtractor for Inner {
 
 /// pyopenjtalk-plusの`run_frontend`（`predict_nani`、`use_sudachi_kanji_yomi`などモデルや外部辞書を
 /// 使う処理を除く）に相当する処理を行い、NJDの特徴量を返す。
+///
+/// 読みが不明な英単語は、VOICEVOX ENGINEの`enable_katakana_english`と同様にカタカナ英語として読む。
 fn run_frontend(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
     mecab.refresh();
 
@@ -154,6 +156,12 @@ fn run_frontend(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<
     )?;
 
     let features = run_njd(mecab, njd, &text)?;
+    // pyopenjtalk-plusの後処理を英単語の読みにも適用するため、後処理より先に変換する
+    let features = katakana_english::convert_unknown_english(
+        features,
+        &mut katakana_english::kanalizer_to_kana,
+        &mut |kana| run_njd(mecab, njd, kana),
+    )?;
     plus::apply_postprocessing(features, &mut |text| run_njd(mecab, njd, text))
 }
 
@@ -497,6 +505,12 @@ mod tests {
     #[case("〇〇町", "マルマル'マチ")]
     // 辞書で読めない異体字は通用字にする
     #[case("𠮷野家", "ヨシノ'ヤ")]
+    // 読みが不明な英単語はカタカナ英語として読む
+    #[case("Pythonで書く", "パ'イソンデ/カ'ク")]
+    // キャメルケースは単語に分けて読み、辞書にある外来語として解析し直す
+    #[case("VoiceVoxを使う", "ボイスボ'ッ_クスオ/_ツカウ'")]
+    // 大文字のみの未知語は1文字ずつ読む
+    #[case("XQZだ", "エッ_クスキュ'ウズィイダ")]
     fn extract_fullcontext_applies_pyopenjtalk_plus_rules(
         #[case] text: &str,
         #[case] expected: &str,
