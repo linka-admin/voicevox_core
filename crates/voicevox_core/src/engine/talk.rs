@@ -1,4 +1,5 @@
 mod audio_query;
+mod english_phrase;
 mod full_context_label;
 mod interpret_query;
 mod kana_parser;
