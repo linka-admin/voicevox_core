@@ -312,6 +312,11 @@ def export_dictionary(dest: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(repo / PYOPENJTALK_PLUS_DICT_PATH, dest)
 
+    # The fork's own words (tools/plusfull-golden/extra/*.csv, e.g. place_names.csv from tools/place-names).
+    for extra in sorted((Path(__file__).parent / "extra").glob("*.csv")):
+        shutil.copy(extra, dest / f"linka-{extra.name}")
+        print(f"added {extra.name}", file=sys.stderr)
+
     import pyopenjtalk
 
     # Removes *.dic / *.bin in `dest`, then runs mecab-dict-index on it.
