@@ -141,6 +141,29 @@ typedef int32_t VoicevoxAccelerationMode;
 #endif // __cplusplus
 
 /**
+ * アクセントの方言。
+ *
+ * \orig-impl{VoicevoxAccentDialect}
+ */
+enum VoicevoxAccentDialect
+#ifdef __cplusplus
+  : int32_t
+#endif // __cplusplus
+ {
+  /**
+   * 東京式。Open JTalkのアクセント型そのまま
+   */
+  VOICEVOX_ACCENT_DIALECT_STANDARD = 0,
+  /**
+   * 京阪式（関西弁）。関西弁アクセント辞書と、辞書にない語は東京式からの推定による
+   */
+  VOICEVOX_ACCENT_DIALECT_KEIHAN = 1,
+};
+#ifndef __cplusplus
+typedef int32_t VoicevoxAccentDialect;
+#endif // __cplusplus
+
+/**
  * 疑問文の語尾の音高の上げ方。
  *
  * \orig-impl{VoicevoxInterrogativeUpspeakStyle}
@@ -813,6 +836,30 @@ __declspec(dllimport)
 VoicevoxResultCode voicevox_open_jtalk_rc_analyze(const struct OpenJtalkRc *open_jtalk,
                                                   const char *text,
                                                   char **output_accent_phrases_json);
+
+/**
+ * 日本語のテキストを解析し、単語ごとの拍の高低を方言のアクセントで返す。
+ *
+ * 生成するJSONは単語の配列で、各要素は`text`（表層形）、`pron`（発音）、`phrase_start`（アクセント句の
+ * 先頭か）、`levels`（拍ごとの`H`か`L`。拍を持たない記号は空）を持つ。拍の数は、同じテキストから
+ * ::voicevox_open_jtalk_rc_analyze で作るアクセント句のモーラ数と揃う。
+ *
+ * 生成したJSON文字列を解放するには ::voicevox_string_free を使う。
+ *
+ * @param [in] open_jtalk Open JTalkのオブジェクト
+ * @param [in] text UTF-8の日本語テキスト
+ * @param [in] dialect アクセントの方言
+ * @param [out] output_word_accents_json 生成先
+ *
+ * \orig-impl{voicevox_open_jtalk_rc_analyze_accent}
+ */
+#ifdef _WIN32
+__declspec(dllimport)
+#endif
+VoicevoxResultCode voicevox_open_jtalk_rc_analyze_accent(const struct OpenJtalkRc *open_jtalk,
+                                                         const char *text,
+                                                         VoicevoxAccentDialect dialect,
+                                                         char **output_word_accents_json);
 
 /**
  * ::OpenJtalkRc を<b>破棄</b>(_destruct_)する。

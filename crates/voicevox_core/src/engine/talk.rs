@@ -2,9 +2,9 @@ mod audio_query;
 mod english_phrase;
 mod full_context_label;
 mod interpret_query;
-pub(crate) mod keihan;
 mod kana_parser;
 mod katakana_english;
+pub(crate) mod keihan;
 pub(crate) mod open_jtalk;
 mod plus;
 pub(crate) mod text;
@@ -22,4 +22,5 @@ pub use self::{
     interpret_query::{
         AudioQueryFrameLength, DEFAULT_ENABLE_INTERROGATIVE_UPSPEAK, InterrogativeUpspeakStyle,
     },
+    keihan::{AccentDialect, WordAccent},
 };

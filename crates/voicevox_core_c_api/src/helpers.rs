@@ -19,8 +19,8 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::{
-    VoicevoxAccelerationMode, VoicevoxAudioQueryFrameLengthOptions, VoicevoxInitializeOptions,
-    VoicevoxInterrogativeUpspeakStyle, VoicevoxLoadVoiceModelOptions,
+    VoicevoxAccelerationMode, VoicevoxAccentDialect, VoicevoxAudioQueryFrameLengthOptions,
+    VoicevoxInitializeOptions, VoicevoxInterrogativeUpspeakStyle, VoicevoxLoadVoiceModelOptions,
     VoicevoxOnExistingVoiceModelId, VoicevoxSynthesisOptions, VoicevoxTtsOptions,
     VoicevoxUserDictWord, VoicevoxUserDictWordType, result_code::VoicevoxResultCode,
 };
@@ -221,6 +221,16 @@ impl From<VoicevoxAccelerationMode> for voicevox_core::AccelerationMode {
             VOICEVOX_ACCELERATION_MODE_AUTO => Self::Auto,
             VOICEVOX_ACCELERATION_MODE_CPU => Self::Cpu,
             VOICEVOX_ACCELERATION_MODE_GPU => Self::Gpu,
+        }
+    }
+}
+
+impl From<VoicevoxAccentDialect> for voicevox_core::AccentDialect {
+    fn from(value: VoicevoxAccentDialect) -> Self {
+        use VoicevoxAccentDialect::*;
+        match value {
+            VOICEVOX_ACCENT_DIALECT_STANDARD => Self::Standard,
+            VOICEVOX_ACCENT_DIALECT_KEIHAN => Self::Keihan,
         }
     }
 }

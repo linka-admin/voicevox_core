@@ -130,7 +130,9 @@ fn head_levels(word: &NjdFeature, accent: usize, state: &mut State) -> Vec<char>
     if word.pos == "名詞" && word.pos_group1 == "数" {
         // 数は高く始め、東京式の核で下がる
         state.follows_tokyo = true;
-        return (1..=moras).map(|i| if accent == 0 || i <= accent { H } else { L }).collect();
+        return (1..=moras)
+            .map(|i| if accent == 0 || i <= accent { H } else { L })
+            .collect();
     }
     if let Some(entry) = DICTIONARY.lookup(word) {
         let conjugated = matches!(&*word.pos, "動詞" | "形容詞") && word.string != word.orig;
@@ -156,8 +158,12 @@ fn head_levels(word: &NjdFeature, accent: usize, state: &mut State) -> Vec<char>
             state.pending_rise = true;
             vec![L]
         }
-        1 => (1..=moras).map(|i| if i == moras { H } else { L }).collect(),
-        _ => (1..=moras).map(|i| if i <= accent { H } else { L }).collect(),
+        1 => (1..=moras)
+            .map(|i| if i == moras { H } else { L })
+            .collect(),
+        _ => (1..=moras)
+            .map(|i| if i <= accent { H } else { L })
+            .collect(),
     }
 }
 
@@ -182,18 +188,28 @@ fn following_levels(
         return vec![H; moras];
     }
     (1..=moras)
-        .map(|i| if accent > 0 && offset + i > accent { L } else { H })
+        .map(|i| {
+            if accent > 0 && offset + i > accent {
+                L
+            } else {
+                H
+            }
+        })
         .collect()
 }
 
 /// 高い拍のあとに低い拍がある。
 fn has_fallen(levels: &[char]) -> bool {
-    levels.iter().skip_while(|&&level| level != H).any(|&level| level == L)
+    levels
+        .iter()
+        .skip_while(|&&level| level != H)
+        .any(|&level| level == L)
 }
 
 /// 文末の終助詞と、断定の「や」。
 fn is_sentence_final(word: &NjdFeature) -> bool {
-    (word.pos == "助詞" && word.pos_group1 == "終助詞") || (word.pos == "助動詞" && word.string == "や")
+    (word.pos == "助詞" && word.pos_group1 == "終助詞")
+        || (word.pos == "助動詞" && word.string == "や")
 }
 
 /// 打ち消しの助動詞（へん・ひん・ん・ない・ぬ）。
@@ -220,22 +236,43 @@ static DICTIONARY: LazyLock<Dictionary> =
 
 impl Dictionary {
     fn parse(csv: &str) -> Self {
-        let mut dictionary = Self { entries: vec![], by_original: HashMap::new(), by_reading: HashMap::new() };
+        let mut dictionary = Self {
+            entries: vec![],
+            by_original: HashMap::new(),
+            by_reading: HashMap::new(),
+        };
         for row in parse_csv(csv).into_iter().skip(1) {
-            let [word, original, _pos, accent, ..] = &row[..] else { continue };
+            let [word, original, _pos, accent, ..] = &row[..] else {
+                continue;
+            };
             // 複数の語形（「・」区切り）は最初の形だけ使う
             let accent = accent.split('・').next().unwrap_or_default();
-            let levels = accent.chars().filter(|c| *c == H || *c == L).collect::<Vec<_>>();
+            let levels = accent
+                .chars()
+                .filter(|c| *c == H || *c == L)
+                .collect::<Vec<_>>();
             if levels.is_empty() {
                 continue;
             }
             let index = dictionary.entries.len();
-            dictionary.entries.push(Entry { levels, falls: accent.contains('↘'), has_original: !original.is_empty() });
+            dictionary.entries.push(Entry {
+                levels,
+                falls: accent.contains('↘'),
+                has_original: !original.is_empty(),
+            });
             if let Some(reading) = word.split('・').next() {
-                dictionary.by_reading.entry(reading.to_owned()).or_default().push(index);
+                dictionary
+                    .by_reading
+                    .entry(reading.to_owned())
+                    .or_default()
+                    .push(index);
             }
             for original in original.split('・').filter(|s| !s.is_empty()) {
-                dictionary.by_original.entry(original.to_owned()).or_default().push(index);
+                dictionary
+                    .by_original
+                    .entry(original.to_owned())
+                    .or_default()
+                    .push(index);
             }
         }
         dictionary
@@ -243,7 +280,10 @@ impl Dictionary {
 
     /// 内容語の型。表記（原形）で引き、なければ表記のない見出しを読みで引く。
     fn lookup(&self, word: &NjdFeature) -> Option<&Entry> {
-        if !matches!(&*word.pos, "名詞" | "動詞" | "形容詞" | "副詞" | "連体詞" | "感動詞") {
+        if !matches!(
+            &*word.pos,
+            "名詞" | "動詞" | "形容詞" | "副詞" | "連体詞" | "感動詞"
+        ) {
             return None;
         }
         let by_original = [&word.orig, &word.string]
@@ -308,7 +348,16 @@ mod tests {
 
     use super::{AccentDialect, word_accents};
 
-    fn word(string: &str, pos: &str, pos1: &str, orig: &str, read: &str, acc: i32, mora: i32, chain: i32) -> NjdFeature {
+    fn word(
+        string: &str,
+        pos: &str,
+        pos1: &str,
+        orig: &str,
+        read: &str,
+        acc: i32,
+        mora: i32,
+        chain: i32,
+    ) -> NjdFeature {
         NjdFeature {
             string: string.to_owned(),
             pos: pos.to_owned(),
@@ -328,7 +377,10 @@ mod tests {
     }
 
     fn levels(features: &[NjdFeature], dialect: AccentDialect) -> Vec<String> {
-        word_accents(features, dialect).into_iter().map(|w| format!("{}:{}", w.text, w.levels)).collect()
+        word_accents(features, dialect)
+            .into_iter()
+            .map(|w| format!("{}:{}", w.text, w.levels))
+            .collect()
     }
 
     /// 東京式はOpen JTalkの型そのまま: 「傘は」頭高、「時間や」平板。
@@ -340,7 +392,10 @@ mod tests {
             word("時間", "名詞", "一般", "時間", "ジカン", 0, 3, 0),
             word("や", "助動詞", "*", "や", "ヤ", 1, 1, 1),
         ];
-        assert_eq!(levels(&features, AccentDialect::Standard), ["傘:HL", "は:L", "時間:LHH", "や:H"]);
+        assert_eq!(
+            levels(&features, AccentDialect::Standard),
+            ["傘:HL", "は:L", "時間:LHH", "や:H"]
+        );
     }
 
     /// 辞書の型: 傘 LH（低起、助詞で高いまま）、時間 HLL（下がったあとは低い）。
@@ -353,7 +408,10 @@ mod tests {
             word("や", "助動詞", "*", "や", "ヤ", 1, 1, 1),
             word("で", "助詞", "終助詞", "で", "デ", 1, 1, 1),
         ];
-        assert_eq!(levels(&features, AccentDialect::Keihan), ["傘:LH", "は:H", "時間:HLL", "や:L", "で:L"]);
+        assert_eq!(
+            levels(&features, AccentDialect::Keihan),
+            ["傘:LH", "は:H", "時間:HLL", "や:L", "で:L"]
+        );
     }
 
     /// 高起の動詞（要る HH）は語幹が高く、打ち消しの「へん」で下がる。
@@ -364,7 +422,10 @@ mod tests {
             word("へん", "助動詞", "*", "へん", "ヘン", 1, 2, 1),
             word("で", "助詞", "終助詞", "で", "デ", 1, 1, 1),
         ];
-        assert_eq!(levels(&features, AccentDialect::Keihan), ["いら:HH", "へん:LL", "で:L"]);
+        assert_eq!(
+            levels(&features, AccentDialect::Keihan),
+            ["いら:HH", "へん:LL", "で:L"]
+        );
     }
 
     /// 低起の動詞（出る LH）は語幹が低く、次の拍で上がってから下がる。
@@ -375,7 +436,10 @@ mod tests {
             word("とる", "動詞", "非自立", "とる", "トル", 1, 2, 1),
             word("で", "助詞", "終助詞", "で", "デ", 1, 1, 1),
         ];
-        assert_eq!(levels(&features, AccentDialect::Keihan), ["出:L", "とる:HL", "で:L"]);
+        assert_eq!(
+            levels(&features, AccentDialect::Keihan),
+            ["出:L", "とる:HL", "で:L"]
+        );
     }
 
     /// 辞書にない語は東京式から: 平板は高く平ら、中高は高く始めて同じ位置で下がる。
@@ -384,10 +448,22 @@ mod tests {
         let features = [
             word("朝会", "名詞", "一般", "朝会", "チョウカイ", 0, 4, -1),
             word("の", "助詞", "連体化", "の", "ノ", 1, 1, 1),
-            word("折りたたみ傘", "名詞", "一般", "折りたたみ傘", "オリタタミガサ", 6, 7, 0),
+            word(
+                "折りたたみ傘",
+                "名詞",
+                "一般",
+                "折りたたみ傘",
+                "オリタタミガサ",
+                6,
+                7,
+                0,
+            ),
             word("が", "助詞", "格助詞", "が", "ガ", 0, 1, 1),
         ];
-        assert_eq!(levels(&features, AccentDialect::Keihan), ["朝会:HHHH", "の:H", "折りたたみ傘:HHHHHHL", "が:L"]);
+        assert_eq!(
+            levels(&features, AccentDialect::Keihan),
+            ["朝会:HHHH", "の:H", "折りたたみ傘:HHHHHHL", "が:L"]
+        );
     }
 
     /// 数は高く始める（「10分」ジュッ'プン → HLLL）。

@@ -65,6 +65,17 @@ impl Inner {
         })
     }
 
+    /// 単語ごとの拍の高低を、方言のアクセントで返す。
+    fn word_accents(
+        &self,
+        text: &str,
+        dialect: super::keihan::AccentDialect,
+    ) -> anyhow::Result<Vec<super::keihan::WordAccent>> {
+        let Resources { mecab, njd, .. } = &mut *self.resources.lock().unwrap();
+        let features = run_frontend(mecab, njd, text)?;
+        Ok(super::keihan::word_accents(&features, dialect))
+    }
+
     // TODO: 中断可能にする
     fn use_user_dict(&self, words: &str) -> crate::result::Result<()> {
         // 空の辞書を読み込もうとするとクラッシュするのでユーザー辞書なしでロード
@@ -305,6 +316,27 @@ pub(crate) mod blocking {
             let words = &user_dict.to_mecab_format();
             self.0.use_user_dict(words)
         }
+
+        /// 単語ごとの拍の高低を、方言（東京式・京阪式）のアクセントで返す。
+        ///
+        /// 京阪式は関西弁アクセント辞書と、辞書にない語は東京式からの推定による。テキストの解析は
+        /// [`analyze`]と同じで、拍の数は同じテキストから作るアクセント句のモーラ数と揃う。
+        ///
+        /// [`analyze`]: crate::blocking::TextAnalyzer::analyze
+        #[cfg_attr(doc, doc(alias = "voicevox_open_jtalk_rc_analyze_accent"))]
+        pub fn analyze_accent(
+            &self,
+            text: &str,
+            dialect: crate::AccentDialect,
+        ) -> crate::result::Result<Vec<crate::WordAccent>> {
+            self.0.word_accents(text, dialect).map_err(|source| {
+                crate::error::ErrorRepr::AnalyzeText {
+                    text: text.to_owned(),
+                    source,
+                }
+                .into()
+            })
+        }
     }
 
     impl FullcontextExtractor for self::OpenJtalk {
@@ -524,6 +556,22 @@ mod tests {
             let result = open_jtalk.0.extract_fullcontext(text);
             assert_debug_fmt_eq!(expected, result);
         }
+    }
+
+    /// 単語ごとの高低を方言ごとに返す（「傘はいらへんで」: 東京式は傘が頭高で「いらへんで」が平板、京阪式は傘が低起で「へん」で下がる）。
+    #[rstest]
+    #[case(crate::AccentDialect::Standard, &["傘:HL", "は:L", "いら:LH", "へん:HH", "で:H"])]
+    #[case(crate::AccentDialect::Keihan, &["傘:LH", "は:H", "いら:HH", "へん:LL", "で:L"])]
+    fn analyze_accent_works(#[case] dialect: crate::AccentDialect, #[case] expected: &[&str]) {
+        let open_jtalk = super::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let words = open_jtalk
+            .analyze_accent("傘はいらへんで", dialect)
+            .unwrap();
+        let words = words
+            .iter()
+            .map(|w| format!("{}:{}", w.text, w.levels))
+            .collect::<Vec<_>>();
+        assert_eq!(expected, words);
     }
 
     /// pyopenjtalk-plusのMeCab・NJD段階の規則が適用されるか。
