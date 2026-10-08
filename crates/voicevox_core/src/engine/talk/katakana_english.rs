@@ -224,12 +224,37 @@ fn word_to_kana(
 /// kanalizerの既定のデコード長（入力の長さ+2）では「vox」→「ヴォックス」のように入力より長い読みが
 /// 途中で打ち切られるため、長めに取る。それでも終わらなかった場合は、VOICEVOX ENGINE（kanalizerの
 /// Python版の既定値）と同じく途中までの読みを使う。
+///
+/// kanalizerの学習データ（[`DATASET`]）にある語は、モデルで推定せず表の読みを使う。
 pub(super) fn kanalizer_to_kana(word: &str) -> anyhow::Result<String> {
+    if let Some(kana) = dataset_kana(word) {
+        return Ok(kana.to_owned());
+    }
     let max_length = kanalizer::MaxLength::try_from(word.len() * 2 + 2)?;
     Ok(kanalizer::convert(word)
         .with_max_length(max_length)
         .with_error_on_incomplete(false)
         .perform()?)
+}
+
+/// kanalizerの学習データ（VOICEVOX/kanalizer-dataset v3、MIT）: 小文字の英単語とカタカナの読み、117,659語。
+/// `tools/kanalizer-dataset/build.py`で作る。gzipで約0.8MB、展開は最初に引いたとき。
+static DATASET: &[u8] = include_bytes!("kanalizer_dataset.tsv.gz");
+
+fn dataset_kana(word: &str) -> Option<&'static str> {
+    static TABLE: once_cell::sync::Lazy<std::collections::HashMap<&'static str, &'static str>> =
+        once_cell::sync::Lazy::new(|| {
+            use std::io::Read as _;
+            let mut text = String::new();
+            flate2::read::GzDecoder::new(DATASET)
+                .read_to_string(&mut text)
+                .expect("kanalizer_dataset.tsv.gz is valid gzip of UTF-8");
+            let text: &'static str = text.leak();
+            text.lines()
+                .filter_map(|line| line.split_once('\t'))
+                .collect()
+        });
+    TABLE.get(word).copied()
 }
 
 #[cfg(test)]
@@ -387,5 +412,23 @@ mod tests {
             ["ボイス", "ボックス"],
             *actual.iter().map(|f| &*f.pron).collect::<Vec<_>>(),
         );
+    }
+
+    /// kanalizerの学習データにある語は、モデルの推定でなくその読み（2026-10-08の聞き取りで、モデルは
+    /// 「minutes」を「ミニューツ」、「eleven」を「エレベン」と読んでいた）。
+    #[rstest]
+    #[case("minutes", "ミニッツ")]
+    #[case("eleven", "イレブン")]
+    #[case("rain", "レイン")]
+    #[case("umbrella", "アンブレラ")]
+    fn known_words_use_the_dataset(#[case] word: &str, #[case] expected: &str) {
+        assert_eq!(expected, super::kanalizer_to_kana(word).unwrap());
+    }
+
+    /// 学習データにない語はモデルで推定する。
+    #[test]
+    fn unknown_words_fall_back_to_the_model() {
+        assert_eq!(None, super::dataset_kana("voicevoxx"));
+        assert!(!super::kanalizer_to_kana("voicevoxx").unwrap().is_empty());
     }
 }
