@@ -371,7 +371,7 @@ dependencies = [
  "bitflags 2.10.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -391,7 +391,7 @@ dependencies = [
  "bitflags 2.10.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2929,7 +2929,7 @@ dependencies = [
 [[package]]
 name = "open_jtalk"
 version = "0.1.25"
-source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=458153ac07467029208fdb5aac31c629914cc553#458153ac07467029208fdb5aac31c629914cc553"
+source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=ede927a25a52e9b1d6243c22b27b12cf8a5234e4#ede927a25a52e9b1d6243c22b27b12cf8a5234e4"
 dependencies = [
  "camino",
  "open_jtalk-sys",
@@ -2939,7 +2939,7 @@ dependencies = [
 [[package]]
 name = "open_jtalk-sys"
 version = "0.16.111"
-source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=458153ac07467029208fdb5aac31c629914cc553#458153ac07467029208fdb5aac31c629914cc553"
+source = "git+https://github.com/linka-admin/open_jtalk-rs.git?rev=ede927a25a52e9b1d6243c22b27b12cf8a5234e4#ede927a25a52e9b1d6243c22b27b12cf8a5234e4"
 dependencies = [
  "bindgen 0.70.1",
  "cmake",
@@ -5250,6 +5250,7 @@ dependencies = [
  "easy-ext",
  "educe 0.4.23",
  "enum-map",
+ "flate2",
  "fs-err",
  "futures-core",
  "futures-io",
