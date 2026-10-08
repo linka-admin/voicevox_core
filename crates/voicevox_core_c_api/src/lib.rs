@@ -462,6 +462,48 @@ pub unsafe extern "C" fn voicevox_open_jtalk_rc_analyze(
 }
 
 // SAFETY: voicevox_core_c_apiを構成するライブラリの中に、これと同名のシンボルは存在しない
+/// 日本語のテキストを解析し、単語ごとの拍の高低を方言のアクセントで返す。
+///
+/// 生成するJSONは単語の配列で、各要素は`text`（表層形）、`pron`（発音）、`phrase_start`（アクセント句の
+/// 先頭か）、`levels`（拍ごとの`H`か`L`。拍を持たない記号は空）を持つ。拍の数は、同じテキストから
+/// ::voicevox_open_jtalk_rc_analyze で作るアクセント句のモーラ数と揃う。
+///
+/// 生成したJSON文字列を解放するには ::voicevox_string_free を使う。
+///
+/// @param [in] open_jtalk Open JTalkのオブジェクト
+/// @param [in] text UTF-8の日本語テキスト
+/// @param [in] dialect アクセントの方言
+/// @param [out] output_word_accents_json 生成先
+///
+/// \orig-impl{voicevox_open_jtalk_rc_analyze_accent}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn voicevox_open_jtalk_rc_analyze_accent(
+    open_jtalk: *const OpenJtalkRc,
+    text: *const c_char,
+    dialect: VoicevoxAccentDialect,
+    output_word_accents_json: NonNull<*mut c_char>,
+) -> VoicevoxResultCode {
+    init_logger_once();
+    let text = unsafe {
+        // SAFETY: The safety contract must be upheld by the caller.
+        CStr::from_ptr(text)
+    };
+    into_result_code_with_error((|| {
+        let words = &open_jtalk
+            .body()
+            .analyze_accent(ensure_utf8(text)?, dialect.into())?;
+        let words = serde_json::to_string(words).expect("should not fail");
+        let words = CString::new(words).expect("should not contain '\\0'");
+        unsafe {
+            // SAFETY: The safety contract must be upheld by the caller.
+            output_word_accents_json
+                .write_unaligned(C_STRING_DROP_CHECKER.whitelist(words).into_raw());
+        }
+        Ok(())
+    })())
+}
+
+// SAFETY: voicevox_core_c_apiを構成するライブラリの中に、これと同名のシンボルは存在しない
 /// ::OpenJtalkRc を<b>破棄</b>(_destruct_)する。
 ///
 /// 破棄対象への他スレッドでのアクセスが存在する場合、それらがすべて終わるのを待ってから破棄する。
@@ -499,6 +541,22 @@ pub enum VoicevoxOnExistingVoiceModelId {
     VOICEVOX_ON_EXISTING_VOICE_MODEL_ID_RELOAD = 1,
     /// 何もしない
     VOICEVOX_ON_EXISTING_VOICE_MODEL_ID_SKIP = 2,
+}
+
+/// アクセントの方言。
+///
+/// \orig-impl{VoicevoxAccentDialect}
+#[repr(i32)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[allow(
+    non_camel_case_types,
+    reason = "実際に公開するC APIとの差異をできるだけ少なくするため"
+)]
+pub enum VoicevoxAccentDialect {
+    /// 東京式。Open JTalkのアクセント型そのまま
+    VOICEVOX_ACCENT_DIALECT_STANDARD = 0,
+    /// 京阪式（関西弁）。関西弁アクセント辞書と、辞書にない語は東京式からの推定による
+    VOICEVOX_ACCENT_DIALECT_KEIHAN = 1,
 }
 
 /// 疑問文の語尾の音高の上げ方。
