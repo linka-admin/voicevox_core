@@ -591,6 +591,9 @@ mod tests {
     // 英文は単語ごとに読み、機能語は後ろの内容語に付ける
     #[case("Let's go to the park.", "レッツゴ'オ/トゥザパ'アク")]
     #[case("What time is it now?", "ワ'ット/タ'イム/イズイットナ'ウ？")]
+    // 漢字の「点」で書いた小数の小数部は1桁ずつ読む（tsukumijima/open_jtalk 810e71b。以前は「センヨンヒャクジュウゴ」）
+    #[case("三点一四一五", "サ'ンテン/イチヨ'ン/イチゴ'オ")]
+    #[case("円周率は三点一四", "エンシュ'ウリツワ/サ'ンテン/イチヨ'ン")]
     fn extract_fullcontext_applies_pyopenjtalk_plus_rules(
         #[case] text: &str,
         #[case] expected: &str,

@@ -37,6 +37,10 @@ pyopenjtalk.run_frontend(text)        # NJD features (run_marine=False, other op
 | `sudachidict-core` | 20260723.1 | Same; the Sudachi dictionary content changes readings |
 | `onnxruntime` | 1.30.0 | `predict_nani=True` (default): an ONNX model picks ナニ/ナン for standalone 「何」. Without onnxruntime pyopenjtalk-plus prints a warning and always uses ナニ |
 
+VOICEVOX CORE itself builds tsukumijima/open_jtalk at `fe71dac` (2026-10-07), three number-reading fixes ahead
+of pyopenjtalk-plus' `f84f40d`. The golden corpora don't contain the numbers those fixes change (all 702 rows
+read the same on either), so the golden data stays as generated.
+
 `sudachipy` / `sudachidict-core` are hard dependencies of pyopenjtalk-plus, so
 the Sudachi step is always active with the defaults. `onnxruntime` is only the
 `onnxruntime` extra, which is why the extra is required here. `generate.py`
