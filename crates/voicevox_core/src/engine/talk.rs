@@ -2,6 +2,7 @@ mod audio_query;
 mod full_context_label;
 mod interpret_query;
 mod kana_parser;
+mod katakana_english;
 pub(crate) mod open_jtalk;
 mod plus;
 pub(crate) mod text;
