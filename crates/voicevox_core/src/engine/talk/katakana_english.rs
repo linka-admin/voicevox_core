@@ -56,25 +56,45 @@ pub(super) fn convert_unknown_english(
     let mut converted = Vec::with_capacity(features.len());
     for feature in features {
         let kana = unknown_alphabets(&feature).and_then(|alphabets| {
-            split_into_words(&alphabets)
-                .map(|word| word_to_kana(word, to_kana))
-                .collect::<anyhow::Result<String>>()
+            alphabets_to_kana(&alphabets, to_kana)
                 .inspect_err(|e| tracing::warn!("could not read {alphabets:?} as English: {e}"))
                 .ok()
         });
-        let Some(kana) = kana else {
-            converted.push(feature);
-            continue;
-        };
-        let kana = replace_vu(&kana);
-        let reanalyzed = reanalyze(&kana)?;
-        if reanalyzed.iter().all(is_known_noun) {
-            converted.extend(reanalyzed);
-        } else {
-            converted.push(loanword_noun(&feature.string, &kana));
+        match kana {
+            Some(kana) => converted.extend(katakana_features(&feature.string, &kana, reanalyze)?),
+            None => converted.push(feature),
         }
     }
     Ok(converted)
+}
+
+/// アルファベットの語をカタカナにする。キャメルケースの語は大文字の前で区切り、1文字の語と大文字のみの
+/// 語は1文字ずつ読む。
+pub(super) fn alphabets_to_kana(
+    alphabets: &str,
+    to_kana: &mut dyn FnMut(&str) -> anyhow::Result<String>,
+) -> anyhow::Result<String> {
+    split_into_words(alphabets)
+        .map(|word| word_to_kana(word, to_kana))
+        .collect()
+}
+
+/// カタカナ英語の読みを解析し直した特徴量。
+///
+/// 辞書にある外来語の読みとアクセントを使う。解析し直した結果に未知語などが含まれ、カタカナが不自然に
+/// 区切られる場合は、1つの名詞として外来語のアクセントを付ける。
+pub(super) fn katakana_features(
+    string: &str,
+    kana: &str,
+    reanalyze: &mut dyn FnMut(&str) -> anyhow::Result<Vec<NjdFeature>>,
+) -> anyhow::Result<Vec<NjdFeature>> {
+    let kana = replace_vu(kana);
+    let reanalyzed = reanalyze(&kana)?;
+    Ok(if reanalyzed.iter().all(is_known_noun) {
+        reanalyzed
+    } else {
+        vec![loanword_noun(string, &kana)]
+    })
 }
 
 /// 「ヴォ」などを「ボ」などにして、辞書にある外来語の表記に合わせる。
@@ -96,7 +116,7 @@ fn is_known_noun(feature: &NjdFeature) -> bool {
 }
 
 /// 辞書にない外来語として、1つの名詞を作る。
-fn loanword_noun(string: &str, kana: &str) -> NjdFeature {
+pub(super) fn loanword_noun(string: &str, kana: &str) -> NjdFeature {
     let moras = split_moras(kana);
     NjdFeature {
         string: string.to_owned(),
@@ -117,7 +137,7 @@ fn loanword_noun(string: &str, kana: &str) -> NjdFeature {
 }
 
 /// カタカナをモーラに区切る。小書きの文字は直前の文字と同じモーラにする。
-fn split_moras(kana: &str) -> Vec<&str> {
+pub(super) fn split_moras(kana: &str) -> Vec<&str> {
     let mut moras = Vec::<&str>::new();
     for (i, c) in kana.char_indices() {
         let end = i + c.len_utf8();
@@ -134,7 +154,7 @@ fn split_moras(kana: &str) -> Vec<&str> {
 /// 外来語のアクセント核の位置（1始まり）。
 ///
 /// 後ろから3モーラ目に置き、それが長音・促音・撥音・二重母音の後半なら1つ前にずらす。
-fn loanword_accent(moras: &[&str]) -> i32 {
+pub(super) fn loanword_accent(moras: &[&str]) -> i32 {
     let mut accent = moras.len().saturating_sub(2).max(1);
     while accent > 1 && is_special_mora(moras[accent - 1]) {
         accent -= 1;
@@ -160,7 +180,7 @@ fn unknown_alphabets(feature: &NjdFeature) -> Option<String> {
     (!alphabets.is_empty()).then_some(alphabets)
 }
 
-fn to_hankaku_alphabet(c: char) -> Option<char> {
+pub(super) fn to_hankaku_alphabet(c: char) -> Option<char> {
     match c {
         'A'..='Z' | 'a'..='z' => Some(c),
         'Ａ'..='Ｚ' | 'ａ'..='ｚ' => char::from_u32(u32::from(c) - 0xfee0),

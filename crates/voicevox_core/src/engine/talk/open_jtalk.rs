@@ -14,7 +14,10 @@ use tempfile::NamedTempFile;
 
 use crate::error::ErrorRepr;
 
-use super::{katakana_english, plus};
+use super::{
+    english_phrase::{self, Segment},
+    katakana_english, plus,
+};
 
 #[derive(thiserror::Error, Debug)]
 #[error("`{function}`の実行が失敗しました")]
@@ -144,13 +147,39 @@ impl FullcontextExtractor for Inner {
 /// 使う処理を除く）に相当する処理を行い、NJDの特徴量を返す。
 ///
 /// 読みが不明な英単語は、VOICEVOX ENGINEの`enable_katakana_english`と同様にカタカナ英語として読む。
+/// 英文（スペースで区切られた2語以上の英単語の並び）は、MeCabに通さずに単語ごとに読みを決める。
 fn run_frontend(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
     mecab.refresh();
 
     // NULはCの文字列を終端してしまうので取り除く
     let text = text.replace('\0', "");
+    let segments = english_phrase::split_english_runs(&text);
+    if !segments.iter().any(|s| matches!(s, Segment::English(_))) {
+        return run_text_frontend(mecab, njd, &text);
+    }
+    let mut features = vec![];
+    for segment in segments {
+        match segment {
+            Segment::Text(text) if text.trim().is_empty() => {}
+            Segment::Text(text) => features.extend(run_text_frontend(mecab, njd, text)?),
+            Segment::English(words) => features.extend(english_phrase::english_features(
+                &words,
+                &mut katakana_english::kanalizer_to_kana,
+                &mut |text| run_njd(mecab, njd, text),
+            )?),
+        }
+    }
+    Ok(features)
+}
+
+/// 英文以外のテキストの[`run_frontend`]。
+fn run_text_frontend(
+    mecab: &mut Mecab,
+    njd: &mut Njd,
+    text: &str,
+) -> anyhow::Result<Vec<NjdFeature>> {
     let text = plus::normalize_unknown_itaiji(
-        &text,
+        text,
         |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
         |s| run_mecab(mecab, s),
     )?;
@@ -511,6 +540,9 @@ mod tests {
     #[case("VoiceVoxを使う", "ボイスボ'ッ_クスオ/_ツカウ'")]
     // 大文字のみの未知語は1文字ずつ読む
     #[case("XQZだ", "エッ_クスキュ'ウズィイダ")]
+    // 英文は単語ごとに読み、機能語は後ろの内容語に付ける
+    #[case("Let's go to the park.", "レッツゴ'オ/トゥザパ'アク")]
+    #[case("What time is it now?", "ワ'ット/タ'イム/イズイットナ'ウ？")]
     fn extract_fullcontext_applies_pyopenjtalk_plus_rules(
         #[case] text: &str,
         #[case] expected: &str,
