@@ -104,6 +104,13 @@ const FUNCTION_WORDS: &[(&str, &str)] = &[
 ///
 /// 疑問詞は英語でも強く読むため、機能語でなく内容語として扱う。
 const CONTENT_WORDS: &[(&str, &str)] = &[
+    // 2026-10-08の聞き取りで崩れていた語（ミニューツ、レーン、エレベン）
+    ("eleven", "イレブン"),
+    ("hour", "アワー"),
+    ("hours", "アワーズ"),
+    ("minute", "ミニット"),
+    ("minutes", "ミニッツ"),
+    ("rain", "レイン"),
     ("hello", "ハロー"),
     ("hi", "ハイ"),
     ("how", "ハウ"),
@@ -121,6 +128,23 @@ const CONTENT_WORDS: &[(&str, &str)] = &[
     ("yes", "イエス"),
 ];
 
+/// 大文字のときだけの読み。「AM」は機能語の「am」（アム）でなく文字の名前。
+const UPPERCASE_WORDS: &[(&str, &str)] = &[("AM", "エーエム"), ("PM", "ピーエム")];
+
+/// ローマ字で書いた日本の地名の接尾辞（「Miura-gun」「Hayama-machi」）。英語のまま読むと「ガン」「マキ」になる。
+const JAPANESE_PLACE_SUFFIXES: &[(&str, &str)] = &[
+    ("cho", "チョウ"),
+    ("fu", "フ"),
+    ("gun", "グン"),
+    ("ken", "ケン"),
+    ("ku", "ク"),
+    ("machi", "マチ"),
+    ("mura", "ムラ"),
+    ("shi", "シ"),
+    ("son", "ソン"),
+    ("to", "ト"),
+];
+
 /// 2語で決まった読みをする句。
 const PHRASES: &[(&str, &str, &str)] = &[("thank", "you", "サンキュー")];
 
@@ -132,7 +156,7 @@ pub(super) enum Segment<'a> {
     English(Vec<String>),
 }
 
-/// テキストから、スペースで区切られた2語以上の英単語の並びを切り出す。
+/// テキストから、スペースで区切られた2語以上の英単語の並び（とハイフンでつないだ1語）を切り出す。
 pub(super) fn split_english_runs(text: &str) -> Vec<Segment<'_>> {
     let tokens = tokenize(text);
     let mut segments = vec![];
@@ -149,7 +173,10 @@ pub(super) fn split_english_runs(text: &str) -> Vec<Segment<'_>> {
                 _ => break,
             }
         }
-        if words.len() < 2 {
+        // 1語だけなら英文として扱わない。ただしハイフンでつないだ語（「Miura-gun」）は、MeCabに通すとハイフンで
+        // 区切られて間が空くので、1語でも英文として読む
+        let hyphenated = words.len() == 1 && text[words[0].0..words[0].1].chars().any(is_hyphen);
+        if words.len() < 2 && !hyphenated {
             i += 1;
             continue;
         }
@@ -193,9 +220,13 @@ fn tokenize(text: &str) -> Vec<Token> {
         let (start, c) = chars[k];
         if is_letter(k) {
             let mut end = k + 1;
-            // 単語の中のアポストロフィは単語に含める（例: 「I'm」）
+            // 単語の中のアポストロフィとハイフンは単語に含める（例: 「I'm」「twenty-four」）。
+            // ハイフンで区切ると、間が空いて別々のアクセント句になっていた
             while is_letter(end)
-                || (chars.get(end).is_some_and(|&(_, c)| is_apostrophe(c)) && is_letter(end + 1))
+                || (chars
+                    .get(end)
+                    .is_some_and(|&(_, c)| is_apostrophe(c) || is_hyphen(c))
+                    && is_letter(end + 1))
             {
                 end += 1;
             }
@@ -220,10 +251,14 @@ fn is_apostrophe(c: char) -> bool {
     matches!(c, '\'' | '’' | '＇')
 }
 
+fn is_hyphen(c: char) -> bool {
+    matches!(c, '-' | '‐' | '－' | '−')
+}
+
 fn normalize_word(word: &str) -> String {
     word.chars()
-        // アルファベット以外はアポストロフィ
-        .map(|c| to_hankaku_alphabet(c).unwrap_or('\''))
+        // アルファベット以外は、ハイフンはハイフン、それ以外はアポストロフィ
+        .map(|c| to_hankaku_alphabet(c).unwrap_or(if is_hyphen(c) { '-' } else { '\'' }))
         .collect()
 }
 
@@ -255,7 +290,10 @@ pub(super) fn english_features(
             i += 2;
             continue;
         }
-        if let Some(kana) = lookup(FUNCTION_WORDS, &lower) {
+        if let Some(kana) = lookup(UPPERCASE_WORDS, word) {
+            let content = katakana_features(word, kana, reanalyze)?;
+            push_phrase(&mut features, std::mem::take(&mut pending), content);
+        } else if let Some(kana) = lookup(FUNCTION_WORDS, &lower) {
             pending.push(function_word(word, kana));
         } else {
             let kana = content_word_kana(word, &lower, to_kana, reanalyze)?;
@@ -276,12 +314,29 @@ fn lookup(table: &[(&str, &'static str)], word: &str) -> Option<&'static str> {
 }
 
 /// 内容語の読み。表、辞書（元の表記、先頭だけ大文字、小文字の順）、kanalizerの順に探す。
+///
+/// ハイフンでつないだ語は、部分ごとの読みをつないで1語にする。最後が日本の地名の接尾辞なら、そこは日本語で読む。
 fn content_word_kana(
     word: &str,
     lower: &str,
     to_kana: &mut dyn FnMut(&str) -> anyhow::Result<String>,
     reanalyze: &mut dyn FnMut(&str) -> anyhow::Result<Vec<NjdFeature>>,
 ) -> anyhow::Result<String> {
+    if word.contains('-') {
+        let parts = word
+            .split('-')
+            .filter(|p| !p.is_empty())
+            .collect::<Vec<_>>();
+        let mut kana = String::new();
+        for (k, part) in parts.iter().enumerate() {
+            let part_lower = part.to_ascii_lowercase();
+            match lookup(JAPANESE_PLACE_SUFFIXES, &part_lower) {
+                Some(suffix) if k > 0 && k + 1 == parts.len() => kana.push_str(suffix),
+                _ => kana.push_str(&content_word_kana(part, &part_lower, to_kana, reanalyze)?),
+            }
+        }
+        return Ok(kana);
+    }
     if let Some(kana) = lookup(CONTENT_WORDS, lower) {
         return Ok(kana.to_owned());
     }
@@ -394,6 +449,11 @@ mod tests {
     #[case("A B、C", vec![words(&["A", "B"]), Text("、C")])]
     // 単語の端のアポストロフィは単語に含めない
     #[case("'quoted words'", vec![Text("'"), words(&["quoted", "words"]), Text("'")])]
+    // ハイフンでつないだ語は1語（「twenty-four」で区切ると間が空いた）
+    #[case("High of twenty-four degrees", vec![words(&["High", "of", "twenty-four", "degrees"])])]
+    #[case("Today in Hayama-machi, Miura-gun", vec![words(&["Today", "in", "Hayama-machi"]), Text(", "), words(&["Miura-gun"])])]
+    // 単語の端のハイフンは単語に含めない
+    #[case("well - done", vec![Text("well - done")])]
     fn split_english_runs_works(#[case] text: &str, #[case] expected: Vec<Segment<'_>>) {
         assert_eq!(expected, super::split_english_runs(text));
     }
@@ -431,6 +491,12 @@ mod tests {
         match word {
             "rust" => Ok("ラスト".to_owned()),
             "love" => Ok("ラブ".to_owned()),
+            "ten" => Ok("テン".to_owned()),
+            "nine" => Ok("ナイン".to_owned()),
+            "twenty" => Ok("トゥエンティ".to_owned()),
+            "four" => Ok("フォー".to_owned()),
+            "hayama" => Ok("ハヤマ".to_owned()),
+            "miura" => Ok("ミウラ".to_owned()),
             _ => anyhow::bail!("unexpected word: {word}"),
         }
     }
@@ -484,6 +550,18 @@ mod tests {
     #[case(&["park", "park"], "パ'ーク/パ'ーク")]
     // 大文字のみの語は1文字ずつ読む
     #[case(&["the", "NHK"], "ザエ'ヌエイチケー")]
+    // 大文字のAM・PMは「am」（機能語）でなく文字の名前
+    #[case(&["nine", "AM"], "ナ'イン/エ'ーエム")]
+    #[case(&["I", "am"], "ア'イアム")]
+    // 辞書とkanalizerのどちらでも崩れる語（2026-10-08の聞き取り: ミニューツ、レーン、エレベン）
+    #[case(&["ten", "minutes"], "テ'ン/ミ'ニッツ")]
+    #[case(&["the", "rain"], "ザレ'イン")]
+    #[case(&["eleven", "minutes"], "イ'レブン/ミ'ニッツ")]
+    // ハイフンでつないだ語は、間を空けずに1語で読む
+    #[case(&["twenty-four", "minutes"], "トゥ'エンティフォー/ミ'ニッツ")]
+    // ローマ字の日本の地名の「-gun」「-machi」は日本語の読み
+    #[case(&["in", "Hayama-machi"], "インハ'ヤママチ")]
+    #[case(&["Miura-gun", "today"], "ミ'ウラグン/トゥ'デイ")]
     fn english_features_works(#[case] words: &[&str], #[case] expected: &str) {
         assert_eq!(expected, english(words));
     }
