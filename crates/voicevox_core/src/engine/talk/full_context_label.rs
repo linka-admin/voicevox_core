@@ -309,20 +309,23 @@ mod tests {
     #[case(
         "んーっ",
         &[
-            "xx^xx-sil+N=N/A:xx+xx+xx/B:xx-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:xx_xx#xx_xx@xx_xx|xx_xx/G:3_3%0_0_xx/H:xx_xx/I:xx-xx@xx+xx&xx-xx|xx+xx/J:1_3/K:1+1-3",
-            "xx^sil-N+N=cl/A:-2+1+3/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:3_3#0_0@1_1|1_3/G:xx_xx%xx_xx_xx/H:xx_xx/I:1-3@1+1&1-1|1+3/J:xx_xx/K:1+1-3",
-            "sil^N-N+cl=sil/A:-1+2+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:3_3#0_0@1_1|1_3/G:xx_xx%xx_xx_xx/H:xx_xx/I:1-3@1+1&1-1|1+3/J:xx_xx/K:1+1-3",
-            "N^N-cl+sil=xx/A:0+3+1/B:09-xx_xx/C:09_xx+xx/D:xx+xx_xx/E:xx_xx!xx_xx-xx/F:3_3#0_0@1_1|1_3/G:xx_xx%xx_xx_xx/H:xx_xx/I:1-3@1+1&1-1|1+3/J:xx_xx/K:1+1-3",
-            "N^cl-sil+xx=xx/A:xx+xx+xx/B:09-xx_xx/C:xx_xx+xx/D:xx+xx_xx/E:3_3!0_0-xx/F:xx_xx#xx_xx@xx_xx|xx_xx/G:xx_xx%xx_xx_xx/H:1_3/I:xx-xx@xx+xx&xx-xx|xx+xx/J:xx_xx/K:1+1-3",
+            "xx^xx-sil+N=N/A:xx+xx+xx/B:xx-xx_xx/C:xx_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:xx_xx#xx_xx@xx_xx|xx_xx/G:2_2%0_0_xx/H:xx_xx/I:xx-xx@xx+xx&xx-xx|xx+xx/J:2_3/K:1+2-3",
+            "xx^sil-N+N=cl/A:-1+1+2/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:2_2#0_0@1_2|1_3/G:1_1%0_0_1/H:xx_xx/I:2-3@1+1&1-2|1+3/J:xx_xx/K:1+2-3",
+            "sil^N-N+cl=sil/A:0+2+1/B:xx-xx_xx/C:09_xx+xx/D:09+xx_xx/E:xx_xx!xx_xx-xx/F:2_2#0_0@1_2|1_3/G:1_1%0_0_1/H:xx_xx/I:2-3@1+1&1-2|1+3/J:xx_xx/K:1+2-3",
+            "N^N-cl+sil=xx/A:0+1+1/B:09-xx_xx/C:09_xx+xx/D:xx+xx_xx/E:2_2!0_0-1/F:1_1#0_0@2_1|3_1/G:xx_xx%xx_xx_xx/H:xx_xx/I:2-3@1+1&1-2|1+3/J:xx_xx/K:1+2-3",
+            "N^cl-sil+xx=xx/A:xx+xx+xx/B:09-xx_xx/C:xx_xx+xx/D:xx+xx_xx/E:1_1!0_0-xx/F:xx_xx#xx_xx@xx_xx|xx_xx/G:xx_xx%xx_xx_xx/H:2_3/I:xx-xx@xx+xx&xx-xx|xx+xx/J:xx_xx/K:1+2-3",
         ],
         &[
             AccentPhrase {
-                moras: vec![
-                    mora("ン", None, "N"),
-                    mora("ン", None, "N"),
-                    mora("ッ", None, "cl"),
-                ],
-                accent: non_zero!(3usize),
+                moras: vec![mora("ン", None, "N"), mora("ン", None, "N")],
+                accent: non_zero!(2usize),
+                pause_mora: None,
+                is_interrogative: false,
+            },
+            // pyopenjtalk-plus v0.4.1-post10はフィラーごとに新しいアクセント句を始める
+            AccentPhrase {
+                moras: vec![mora("ッ", None, "cl")],
+                accent: non_zero!(1usize),
                 pause_mora: None,
                 is_interrogative: false,
             },

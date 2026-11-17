@@ -1,4 +1,4 @@
-// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
+// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
 
 //! pyopenjtalk-plusのテキスト処理フロントエンドのうち、MeCabとNJDの段階で行う規則。
 //!
@@ -13,6 +13,7 @@
 mod accent;
 mod before_chaining;
 mod context_reading;
+mod devoicing;
 mod itaiji;
 mod itaiji_map;
 mod kana;
@@ -50,6 +51,16 @@ pub(super) fn apply_njd_rules_before_digit(
     number_boundary::insert_number_boundaries(features)
 }
 
+/// 後処理がOpen JTalkに頼む処理。
+pub(super) trait NjdStages {
+    /// テキストをMeCabとNJDの全段階で解析し直す。pyopenjtalk-plusの`OpenJTalk.run_frontend`に
+    /// 相当し、踊り字の展開で漢字を解析し直すのに使う。
+    fn reanalyze(&mut self, text: &str) -> anyhow::Result<Vec<NjdFeature>>;
+
+    /// `njd_set_unvoiced_vowel`だけを通す。pyopenjtalk-plusの`OpenJTalk.set_unvoiced_vowel`。
+    fn set_unvoiced_vowel(&mut self, features: &[NjdFeature]) -> Vec<NjdFeature>;
+}
+
 /// NJDの全段階（`njd_set_long_vowel`まで）の後に適用する後処理。
 ///
 /// pyopenjtalk-plusの`apply_postprocessing`を既定値（`use_vanilla=False`など）で呼んだものに
@@ -59,13 +70,12 @@ pub(super) fn apply_njd_rules_before_digit(
 /// - Sudachiによる読みの補正（`modify_kanji_yomi`と、`read_unknown_kanji`の語単位の読み）
 /// - marineによるアクセントの推定
 /// - ユーザー辞書の読み保護
-///
-/// `reanalyze`は踊り字の展開で漢字を解析し直すためのもので、pyopenjtalk-plusの
-/// `OpenJTalk.run_frontend`に相当する。
 pub(super) fn apply_postprocessing(
     features: Vec<NjdFeature>,
-    reanalyze: &mut dyn FnMut(&str) -> anyhow::Result<Vec<NjdFeature>>,
+    stages: &mut dyn NjdStages,
 ) -> anyhow::Result<Vec<NjdFeature>> {
+    // 後処理の規則が読みや発音を書き換えた形態素を見分けられるよう、規則を当てる前の読みと発音を控える
+    let readings_before_rules = devoicing::readings(&features);
     // フィラーのアクセントは読み変更より先に補正する
     let features = accent::modify_filler_accent(features);
     // pyopenjtalk-plusでSudachiによる読みの上書き（`modify_kanji_yomi`）が担う位置
@@ -75,11 +85,14 @@ pub(super) fn apply_postprocessing(
     let features = reading::modify_old_province_yomi(features);
     let features = loanword_kana::restore_loanword_kana(features);
     let features = unknown_kanji::read_unknown_kanji(features);
-    // 読みを確定したあとで接頭辞の後ろのアクセント句を分け、分けたあとの句でアクセントを補正する
-    let features = accent::split_prefix_accent_phrase(features);
+    // ここまでの後処理は形態素の数を変えないので、位置ごとに規則の前後の読みを比べ、読みか発音を
+    // 書き換えた形態素の無声化を書き換えた後の発音で判定し直す
+    let features = devoicing::redo_devoicing(&readings_before_rules, features, &mut |features| {
+        stages.set_unvoiced_vowel(features)
+    });
     let features = accent::retreat_acc_nuc(features);
     let features = accent::modify_acc_after_chaining(features);
-    odori::process_odori_features(features, reanalyze)
+    odori::process_odori_features(features, &mut |text| stages.reanalyze(text))
 }
 
 #[cfg(test)]

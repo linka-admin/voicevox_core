@@ -1,4 +1,4 @@
-// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
+// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
 // (`pyopenjtalk/openjtalk.pyx`: `OpenJTalk._run_njd_from_mecab`の数詞の境界ノードの処理)
 
 //! 「EF65 1032号機」の「65」と「1032」を別々に位取りするための、一時的な境界ノード。
@@ -43,8 +43,11 @@ pub(super) fn insert_number_boundaries(features: Vec<NjdFeature>) -> (Vec<NjdFea
 }
 
 /// 境界ノードを取り除き、その直後のノードを結合境界にする。
+///
+/// 「二〇 万円」のように空白を挟んで「十」「百」「千」に「万」以上の位が続く場合は、空白のない
+/// 「二〇万円」と同じく同じ数として句を続ける。
 pub(crate) fn remove_number_boundaries(features: Vec<NjdFeature>) -> Vec<NjdFeature> {
-    let mut result = Vec::with_capacity(features.len());
+    let mut result = Vec::<NjdFeature>::with_capacity(features.len());
     let mut after_boundary = false;
     for mut current in features {
         if current.pos_group3 == BOUNDARY {
@@ -52,7 +55,11 @@ pub(crate) fn remove_number_boundaries(features: Vec<NjdFeature>) -> Vec<NjdFeat
             continue;
         }
         if after_boundary {
-            current.chain_flag = 0;
+            let is_place_after_place = result
+                .last()
+                .is_some_and(|previous| ["十", "百", "千"].contains(&&*previous.string))
+                && ["万", "億", "兆", "京"].contains(&&*current.string);
+            current.chain_flag = if is_place_after_place { 1 } else { 0 };
             after_boundary = false;
         }
         result.push(current);
@@ -138,6 +145,26 @@ mod tests {
                 number("二", 1)
             ],
             actual,
+        );
+    }
+
+    #[rstest]
+    #[case("十", "万", 1)]
+    #[case("千", "億", 1)]
+    #[case("二", "万", 0)]
+    #[case("十", "円", 0)]
+    fn keeps_chain_of_place_after_place(
+        #[case] previous: &str,
+        #[case] current: &str,
+        #[case] expected: i32,
+    ) {
+        // 「二〇 万円」は空白のない「二〇万円」と同じ数として句を続ける
+        let previous = number(previous, 1);
+        let current = number(current, 1);
+        let features = vec![previous, boundary_of(&current), current];
+        assert_eq!(
+            expected,
+            super::remove_number_boundaries(features)[1].chain_flag
         );
     }
 }

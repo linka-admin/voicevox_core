@@ -4,7 +4,7 @@
 //! 仮名の文字種の判定とモーラへの分割。
 
 /// 前の文字と結合して1モーラになる小書き仮名。
-pub(super) const SMALL_KANA: &str = "ャュョァィゥェォ";
+pub(super) const SMALL_KANA: &str = "ャュョァィゥェォヮ";
 
 /// 1文字以上あり、すべてカタカナ（長音符と踊り字「ヽ」「ヾ」を含む）か。
 pub(super) fn is_katakana_word(text: &str) -> bool {

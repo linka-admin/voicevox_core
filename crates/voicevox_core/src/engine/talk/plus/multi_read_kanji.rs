@@ -1,12 +1,13 @@
-// Based on pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
+// Based on pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
 // (`pyopenjtalk/__init__.py`: `MULTI_READ_KANJI_LIST`, `pyopenjtalk/utils.py`: `modify_kanji_yomi`)
 
 //! 読みが複数ある漢字の無声化の解除。
 //!
 //! pyopenjtalk-plusの`modify_kanji_yomi`は、これらの漢字1文字の形態素の発音をSudachiの読みで
-//! 上書きする。その副作用で発音に付いていた無声化記号`’`が消え、無声化されなくなる。実際の
-//! 変化の大半はこの無声化の解除で、読みそのものが変わるのはまれであるため、Sudachiは使わずに
-//! 無声化の解除だけを再現する。
+//! 上書きする。その副作用で発音に付いていた無声化記号`’`が消え、v0.4.1-post10からは、読みか発音を
+//! 書き換えた形態素の無声化を書き換えた後の発音で判定し直す（[`super::devoicing`]）。読みそのものが
+//! 変わるのはまれであるため、Sudachiは使わずに無声化記号を外すことだけを再現し、判定し直しは
+//! [`super::devoicing`]に任せる。
 
 use open_jtalk::NjdFeature;
 

@@ -1,5 +1,5 @@
-// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
-// (`pyopenjtalk/utils.py`: `restore_loanword_kana`)
+// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
+// (`pyopenjtalk/_loanword.py`: `restore_loanword_kana`)
 
 //! 辞書が別の仮名へ置き換えた外来語の表記（「ヴィ」を「ビ」にするなど）を、表層形から戻す。
 
@@ -40,7 +40,17 @@ const LOANWORD_KANA_RESTORATIONS: &[(&str, &str)] = &[
 /// 表層形と読み・発音の全体が1文字ずつ対応する場合だけ戻すので、日本語で定着した別の表記や、
 /// 中黒などを省いた語は変えない。
 pub(super) fn restore_loanword_kana(mut features: Vec<NjdFeature>) -> Vec<NjdFeature> {
-    for feature in &mut features {
+    // 結合済みの句の核は先頭の形態素が持つので、復元する語の句内の位置も追う
+    let mut phrase_head = 0;
+    let mut phrase_mora_offset = 0;
+    for index in 0..features.len() {
+        if index == 0 || features[index].chain_flag != 1 {
+            phrase_head = index;
+            phrase_mora_offset = 0;
+        } else {
+            phrase_mora_offset += features[index - 1].mora_size;
+        }
+        let feature = &mut features[index];
         // 外来語だけへ限定し、漢字や区切り記号を含む語の読みを表層形から作らない
         if !is_katakana_word(&feature.string) {
             continue;
@@ -57,21 +67,34 @@ pub(super) fn restore_loanword_kana(mut features: Vec<NjdFeature>) -> Vec<NjdFea
         feature.mora_size = mora_count(&feature.pron.replace('’', ""));
         // 「イエ」を「イェ」に戻すとモーラが減るので、アクセント核も戻す前と同じモーラの位置へずらす
         // 核が戻した箇所の中にあるときは、戻した箇所の最後のモーラに置く
-        let mut accent_shift = 0;
-        for Segment {
-            start,
-            collapsed_mora_count,
-            original_mora_count,
-        } in segments
-        {
-            if feature.acc > start + collapsed_mora_count {
-                accent_shift += collapsed_mora_count - original_mora_count;
-            } else if feature.acc > start {
-                let offset_in_segment = feature.acc - start;
-                accent_shift += offset_in_segment - offset_in_segment.min(original_mora_count);
-            }
+        let accent_shift = |acc: i32, start: i32| {
+            segments
+                .iter()
+                .map(
+                    |&Segment {
+                         start: segment_start,
+                         collapsed_mora_count,
+                         original_mora_count,
+                     }| {
+                        let segment_start = start + segment_start;
+                        if acc > segment_start + collapsed_mora_count {
+                            collapsed_mora_count - original_mora_count
+                        } else if acc > segment_start {
+                            let offset_in_segment = acc - segment_start;
+                            offset_in_segment - offset_in_segment.min(original_mora_count)
+                        } else {
+                            0
+                        }
+                    },
+                )
+                .sum::<i32>()
+        };
+        feature.acc -= accent_shift(feature.acc, 0);
+        // 語の中の核と同じ対応を句全体の核にも適用し、縮む箇所より前にある核はそのまま保つ
+        if phrase_head != index {
+            let head = &mut features[phrase_head];
+            head.acc -= accent_shift(head.acc, phrase_mora_offset);
         }
-        feature.acc -= accent_shift;
     }
     features
 }
@@ -130,6 +153,14 @@ fn restore_spelling(surface: &str, kana: &str) -> Option<Restored> {
         }
 
         let surface_char = surface_rest.chars().next().expect("not empty");
+        // 表層形の「ウェイヴ」の「イ」を辞書が長音の「ウェーブ」にしたように、長音の書き方だけが
+        // 違う箇所は発音の長音のまま対応させる
+        if "イウ".contains(surface_char) && kana_rest.starts_with('ー') {
+            restored.push('ー');
+            surface_rest = &surface_rest[surface_char.len_utf8()..];
+            kana_offset += 'ー'.len_utf8();
+            continue;
+        }
         if !kana_rest.starts_with(surface_char) {
             return None;
         }
@@ -160,6 +191,8 @@ mod tests {
     #[case("アイシュヴァルヤ", "アイシュバルヤ", "アイシュヴァルヤ", 6)]
     #[case("テュルク", "チュルク", "テュルク", 3)]
     #[case("アクスィス", "アクシス", "アクスィス", 4)]
+    // 長音の書き方だけが違う箇所は発音の長音のまま対応させる
+    #[case("ウェイヴ", "ウェーブ", "ウェーヴ", 3)]
     fn restore_loanword_kana_works(
         #[case] surface: &str,
         #[case] pron: &str,
@@ -204,5 +237,20 @@ mod tests {
             ("イェテボリ", 2, 4),
             (&*actual.pron, actual.acc, actual.mora_size),
         );
+    }
+
+    /// 句の途中の語の表記を戻すと、句の先頭が持つ核も同じモーラの位置へずらす。
+    #[test]
+    fn restore_loanword_kana_moves_phrase_accent_nucleus() {
+        // 「新イェテボリ」: 核は句頭の「新」が持ち、「テ」に置かれている
+        let mut head = node("新", "接頭詞", "名詞接続", "シン");
+        head.acc = 4;
+        head.mora_size = 2;
+        let mut word = node("イェテボリ", "名詞", "固有名詞", "イエテボリ");
+        word.acc = 3;
+        word.mora_size = 5;
+        word.chain_flag = 1;
+        let actual = super::restore_loanword_kana(vec![head, word]);
+        assert_eq!((3, 2), (actual[0].acc, actual[1].acc));
     }
 }

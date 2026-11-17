@@ -1,4 +1,4 @@
-// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
+// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
 // (`pyopenjtalk/openjtalk.pyx`: `_apply_original_rule_before_chaining`)
 
 //! アクセント句の結合（`njd_set_accent_phrase`）の前に適用する、pyopenjtalk-plus独自の規則。
@@ -7,33 +7,141 @@ use std::collections::HashSet;
 
 use open_jtalk::NjdFeature;
 
-use super::kana::contains_hiragana;
+use super::{accent::split_prefix_accent_phrase, kana::contains_hiragana};
 
 const DIGIT_CHARACTERS: &str = "０１２３４５６７８９〇零一二三四五六七八九";
 const NUMERAL_SEPARATORS: &str = "−－ー‐‑‒–—-";
 
+/// 数詞の直後で英字の記号として解析された1文字の単位を、助数詞として読むための読み・アクセント核・
+/// モーラ数・結合規則。
+///
+/// 値は既定辞書の助数詞の行と同じにして、「四千ｇ」と辞書の助数詞が選ばれた場合とで読みとアクセントを
+/// そろえる。1文字の単位の助数詞の行はコストが高く、「四千ｇだった」「八十ｍ先」では英字の記号に負けて
+/// 単位が読まれない。辞書のコストを下げると読点の後の「ｔ値」や数式の変数の「ｍ」まで助数詞になるので、
+/// 数詞の直後に限って読み替える。
+const UNIT_LETTER_COUNTERS: &[(&str, &str, i32, i32, &str)] = &[
+    ("ｇ", "グラム", 1, 3, "C1"),
+    ("ｍ", "メートル", 0, 4, "C2"),
+    ("ｔ", "トン", 1, 2, "C3"),
+    ("ｌ", "リットル", 0, 4, "C2"),
+];
+
+/// 単位の英字の直後にあると、その英字を数式の変数とみなす演算子（「2m+1」の「＋」など）。
+///
+/// 「1m60cm」の数字、「五百ｇ／タマネギ」の区切りの斜線、空白を挟んだ「七十ｇ　Ａ」の英字は単位の後にも
+/// 続くので含めない。
+const UNIT_LETTER_FORMULA_OPERATORS: &str = "＋−－＝×÷＊＜＞+-=*<>";
+
 /// サ変接続・接頭語・動詞連続・連用形・助動詞などの結合規則を適用する。
 ///
 /// `modify_numeral_reading`が`true`の場合、分数の分母の「分」を「ブン」、2つ以上続く「〇」を
-/// 「マル」と読む。
+/// 「マル」と読み、数詞の直後の「ｇ」「ｍ」などの単位の英字を助数詞として読む。また、接頭辞の後ろの
+/// アクセント句を分ける（[`split_prefix_accent_phrase`]）。
 pub(super) fn apply_original_rule_before_chaining(
     mut features: Vec<NjdFeature>,
     modify_numeral_reading: bool,
 ) -> Vec<NjdFeature> {
     let numeral_zero_indices = mark_numeral_zeros(&mut features);
+    let len = features.len();
 
-    for i in 0..features.len().saturating_sub(1) {
-        let (head, tail) = features.split_at_mut(i + 1);
-        let (preceding, njd) = head.split_at_mut(i);
-        let njd = &mut njd[0];
-        let (next, following) = tail.split_first_mut().expect("`i + 1 < len`");
-        let following = following.first();
+    for i in 0..len.saturating_sub(1) {
+        // ナイ形に続く「の」「と」は、助動詞に付く結合規則を明示して否定形の核を保つ
+        // 助動詞用の規則がないと結合規則の末尾のF2が適用され、平板型の「知らないのか」が
+        // 「シラナイ＼ノカ」になる
+        if features[i].pos == "助動詞"
+            && features[i].orig == "ない"
+            && (features[i + 1].pos == "助詞"
+                || (features[i + 1].pos == "名詞" && features[i + 1].pos_group1 == "非自立"))
+            && ["の", "と"].contains(&&*features[i + 1].orig)
+        {
+            let next = &mut features[i + 1];
+            next.chain_rule = std::iter::once("助動詞%F1")
+                .chain(
+                    next.chain_rule
+                        .split('/')
+                        .filter(|rule| !rule.starts_with("助動詞%")),
+                )
+                .collect::<Vec<_>>()
+                .join("/");
+        }
+
+        // 放置を意味する「放っておく」「放っとく」の「放っ」は、読み補正で平板型の「放る」の
+        // 「ホーッ」に替えるため、結合の前に核を0にする
+        // 結合した後で核だけを書き換えると、「放っておきません」「放っておきなさい」で後続の語が
+        // 置く核まで消えてしまう
+        if features[i].string == "放っ"
+            && ((features[i + 1].string == "て"
+                && features
+                    .get(i + 2)
+                    .is_some_and(|f| f.orig == "おく" && f.pos == "動詞"))
+                || (features[i + 1].orig == "とく" && features[i + 1].pos == "動詞"))
+        {
+            features[i].acc = 0;
+        }
+
+        // 動詞の意向形の「う」は、付属語の「う」が核を決める型で、「守ろう」「盛ろう」を
+        // 「マモロ＼ー」「モロ＼ー」と「う」の直前の拍の後で下げる
+        // 推量の「だろう」の「う」は直前が助動詞なので変えない
+        // 平板の動詞の意向形に「と」と「する」「思う」が続く「盛ろうとする」は、平板のまま読む
+        if features[i].pos == "動詞"
+            && features[i].cform == "未然ウ接続"
+            && features[i + 1].pos == "助動詞"
+            && features[i + 1].orig == "う"
+        {
+            let is_flat_before_to_suru = features[i].acc == 0
+                && i + 3 < len
+                && features[i + 2].string == "と"
+                && ["する", "思う"].contains(&&*features[i + 3].orig);
+            if !is_flat_before_to_suru {
+                features[i + 1].chain_rule = "動詞%F4@0/特殊助動詞%F2@0".to_owned();
+            }
+        }
+
+        // 平板の動詞に使役の「せ」「させ」と「ない」が続く「聞かせない」「歌わせない」は、平板の
+        // 「キカセナイ」「ウタワセナイ」と読む
+        // 「せ」の核をなくすと、後ろの動詞の連続の規則が平板のC4で結合し、「ない」は直前の動詞の型を
+        // 保つF1で続く。起伏の動詞の「書かせない」は、今までどおり「カカセ＼ナイ」と読む
+        let is_causative_after_flat_verb = features[i].pos == "動詞"
+            && features[i].pos_group1 == "自立"
+            && features[i].acc == 0
+            && features[i + 1].pos == "動詞"
+            && features[i + 1].pos_group1 == "接尾"
+            && ["せる", "させる"].contains(&&*features[i + 1].orig);
+        if is_causative_after_flat_verb
+            && features
+                .get(i + 2)
+                .is_some_and(|f| f.pos == "助動詞" && f.orig == "ない")
+        {
+            features[i + 1].acc = 0;
+            let nai = &mut features[i + 2];
+            nai.chain_rule = nai
+                .chain_rule
+                .split('/')
+                .map(|rule| {
+                    if rule.starts_with("動詞%") {
+                        "動詞%F1"
+                    } else {
+                        rule
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+        }
+        // 平板の動詞の使役の基本形「聞かせる」「歌わせる」も、平板の「キカセル」「ウタワセル」と読む
+        // 起伏の動詞の「書かせる」は「カカセ＼ル」のまま読み、「聞かせます」「聞かせれば」は付属語の
+        // 規則で核を置く
+        if is_causative_after_flat_verb && features[i + 1].cform == "基本形" {
+            features[i + 1].acc = 0;
+        }
 
         // 一般名詞の「湖」を接尾辞として読む場合、全体が4モーラ以上なら前部末型で結合する
         // 「ミズウミ」は後処理で1モーラの「コ」になるので、その長さで判定する
-        if njd.pos == "名詞" && next.string == "湖" && next.pron == "ミズウミ" {
+        if features[i].pos == "名詞"
+            && features[i + 1].string == "湖"
+            && features[i + 1].pron == "ミズウミ"
+        {
             let mut preceding_mora_size = 0;
-            for f in preceding.iter().chain([&*njd]).rev() {
+            for f in features[..=i].iter().rev() {
                 if f.pos != "名詞" {
                     break;
                 }
@@ -43,21 +151,46 @@ pub(super) fn apply_original_rule_before_chaining(
                 }
             }
             if preceding_mora_size + 1 >= 4 {
-                next.chain_rule = "C3".to_owned();
+                features[i + 1].chain_rule = "C3".to_owned();
             }
         }
 
         // 名詞の後ろで新しい語を作る「不足」は連濁した「ブソク」と読む
-        if njd.pos == "名詞" && next.string == "不足" && next.pron == "フソク" {
-            next.read = "ブソク".to_owned();
-            next.pron = "ブソク".to_owned();
+        if features[i].pos == "名詞"
+            && features[i + 1].string == "不足"
+            && features[i + 1].pron == "フソク"
+        {
+            features[i + 1].read = "ブソク".to_owned();
+            features[i + 1].pron = "ブソク".to_owned();
         }
 
         // 分母を表す「数値 + 分 + の + 数値」だけ、時間量の「フン」・「プン」や割合の「ブ」と
         // 区別して「ブン」と読む
-        let is_fraction_denominator =
-            next.string == "の" && following.is_some_and(|f| f.pos_group1 == "数");
-        if modify_numeral_reading && is_fraction_denominator && njd.string.ends_with('分') {
+        let mut is_fraction_denominator = false;
+        if i + 2 < len && features[i + 1].string == "の" {
+            // 「3分の何」「何分の何」の分子の「何」は数を問う語なので、数詞の「ナン」と読み、分母を
+            // 「ブン」にする
+            // 「5分の何もない時間」のように「も」が続く「何」は、数でない「ナニ」の用法なので除く
+            // 「千分の何がし」はMeCabが「何」「が」「し」に分けるが、数でない「ナニガシ」なので除く
+            if modify_numeral_reading && is_fraction_numerator_nani(&features, i) {
+                let following = &mut features[i + 2];
+                following.pos = "名詞".to_owned();
+                following.pos_group1 = "数".to_owned();
+                following.pos_group2 = "*".to_owned();
+                following.pos_group3 = "*".to_owned();
+                following.read = "ナン".to_owned();
+                following.pron = "ナン".to_owned();
+                following.acc = 1;
+                following.mora_size = 2;
+                following.chain_rule = "C3".to_owned();
+            }
+            is_fraction_denominator = features[i + 2].pos_group1 == "数";
+        }
+        if modify_numeral_reading && is_fraction_denominator && features[i].string.ends_with('分')
+        {
+            let is_counter_after_numeral =
+                features[i].string == "分" && i > 0 && features[i - 1].pos_group1 == "数";
+            let njd = &mut features[i];
             if njd.pron.ends_with("フン") || njd.pron.ends_with("プン") {
                 njd.read = replace_last_two_chars(&njd.read, "ブン");
                 njd.pron = replace_last_two_chars(&njd.pron, "ブン");
@@ -71,29 +204,70 @@ pub(super) fn apply_original_rule_before_chaining(
                 .chars()
                 .filter(|&c| !"ャュョァィゥェォ’".contains(c))
                 .count() as _;
+            // 分数は「万分の一」（「マンブンノイチ＼」）と同じく、分母を平板にして分子の数詞の核で
+            // 1つのアクセント句に読む
+            // 数詞に続く助数詞の「分」は、数詞との結合後の句を平板にするF5にし、「三分」のような
+            // 1語の分母は核をなくす
+            if is_counter_after_numeral {
+                njd.chain_rule = "F5".to_owned();
+            } else {
+                njd.acc = 0;
+            }
+            features[i + 1].chain_flag = 1;
+            features[i + 2].chain_flag = 1;
+            features[i + 2].chain_rule = "C1".to_owned();
         }
 
         // 算用数字が別形態素になった分数では、数詞と「の」に挟まれた助数詞の「分」を「ブン」へ変える
         if modify_numeral_reading
             && i > 0
-            && njd.string == "分"
-            && preceding[i - 1].pos_group1 == "数"
+            && features[i].string == "分"
+            && features[i - 1].pos_group1 == "数"
             && is_fraction_denominator
         {
+            let njd = &mut features[i];
             njd.read = "ブン".to_owned();
             njd.pron = "ブン".to_owned();
             njd.mora_size = 2;
         }
 
+        // 数詞の直後で英字の記号として解析された「ｇ」「ｍ」などの単位を、辞書の助数詞と同じ読みと
+        // アクセントに置き換える
+        // 助数詞に変えておくと、後段のNJDの数詞処理が「サンゼングラム」のように数詞と1つの
+        // アクセント句にまとめる。「2m+1」「x＝2ｔ×3」のように英字の直後に演算子が続く場合は、
+        // 数式の変数として英字のまま読む
+        if modify_numeral_reading
+            && features[i].pos_group1 == "数"
+            && features[i + 1].pos == "記号"
+            && !features
+                .get(i + 2)
+                .and_then(|f| f.string.chars().next())
+                .is_some_and(|c| UNIT_LETTER_FORMULA_OPERATORS.contains(c))
+            && let Some(&(_, read, acc, mora_size, chain_rule)) = UNIT_LETTER_COUNTERS
+                .iter()
+                .find(|(letter, ..)| *letter == features[i + 1].string)
+        {
+            let unit = &mut features[i + 1];
+            unit.pos = "名詞".to_owned();
+            unit.pos_group1 = "接尾".to_owned();
+            unit.pos_group2 = "助数詞".to_owned();
+            unit.pos_group3 = "*".to_owned();
+            unit.read = read.to_owned();
+            unit.pron = read.to_owned();
+            unit.acc = acc;
+            unit.mora_size = mora_size;
+            unit.chain_rule = chain_rule.to_owned();
+        }
+
         // 番号の桁に含まれない「〇〇町」のような伏字だけ、NJDの数字変換へ渡さずマルと読む
         // アクセント句の核はNJDの結合に任せる
         if modify_numeral_reading
-            && njd.string == "〇"
-            && next.string == "〇"
+            && features[i].string == "〇"
+            && features[i + 1].string == "〇"
             && !numeral_zero_indices.contains(&i)
             && !numeral_zero_indices.contains(&(i + 1))
         {
-            for placeholder in [&mut *njd, &mut *next] {
+            for placeholder in &mut features[i..=i + 1] {
                 // MeCabは後ろに何も続かない「〇〇」を記号として返すので、品詞も名詞にそろえる
                 placeholder.pos = "名詞".to_owned();
                 placeholder.pos_group1 = "一般".to_owned();
@@ -104,6 +278,10 @@ pub(super) fn apply_original_rule_before_chaining(
                 placeholder.mora_size = 2;
             }
         }
+
+        let (head, tail) = features.split_at_mut(i + 1);
+        let njd = &mut head[i];
+        let next = &mut tail[0];
 
         // 接尾辞「球」は漢語・外来語との生産的な結合をキュウとし、送り仮名を持つ和語だけ連濁させる
         if next.string == "球"
@@ -166,7 +344,48 @@ pub(super) fn apply_original_rule_before_chaining(
         }
     }
 
+    // フィラーは前の語の句につなげず、フィラー自身と直後の名詞からそれぞれ新しいアクセント句を始める
+    // 句の切れ目をNJDが核を計算した後で変えると、前の句の核が句の外に残る（「東京タワーえーと
+    // スカイツリー」が「タワー」の後で下がらない）ので、核の計算の前に決める
+    for i in 0..len {
+        if features[i].pos != "フィラー" {
+            continue;
+        }
+        features[i].chain_flag = 0;
+        if let Some(next) = features.get_mut(i + 1)
+            && next.pos == "名詞"
+        {
+            next.chain_flag = 0;
+        }
+    }
+
+    if modify_numeral_reading {
+        // 「当大学病院」「本研究計画」は、接頭辞の後ろで句を分けてから複合語の核を計算する
+        // 計算後に句だけを分けると、接頭辞につながった間に失われた後ろの句の核を復元できない
+        features = split_prefix_accent_phrase(features);
+    }
+
     features
+}
+
+/// 「3分の何」「何分の何」のように、分母の「分」の後ろの「の」に続く、数を問う「何」か。
+fn is_fraction_numerator_nani(features: &[NjdFeature], i: usize) -> bool {
+    let njd = &features[i];
+    let Some(denominator) = njd.string.strip_suffix('分') else {
+        return false;
+    };
+    let following = &features[i + 2];
+    ((!denominator.is_empty()
+        && denominator
+            .chars()
+            .all(|c| DIGIT_CHARACTERS.contains(c) || "十百千万何".contains(c)))
+        || (i > 0 && features[i - 1].pos_group1 == "数"))
+        && following.string == "何"
+        && following.pos_group1 != "数"
+        && features.get(i + 3).is_none_or(|f| f.string != "も")
+        && !(i + 4 < features.len()
+            && features[i + 3].string == "が"
+            && features[i + 4].string == "し")
 }
 
 /// 番号の桁に含まれる「〇」をゼロへ戻し、その位置を返す。
@@ -196,6 +415,14 @@ fn mark_numeral_zeros(features: &mut [NjdFeature]) -> HashSet<usize> {
             {
                 is_number |= DIGIT_CHARACTERS.contains(&*after.string);
             }
+        }
+        // 「〇一二〇-九九九-〇〇〇」の最後の組と、「一,〇〇〇」の3桁区切りの後の組も、数字の後の
+        // 区切りに続く数として扱う
+        if start >= 2
+            && "−－ー‐‑‒–—-，".contains(&*features[start - 1].string)
+            && DIGIT_CHARACTERS.contains(&*features[start - 2].string)
+        {
+            is_number = true;
         }
         if is_number && index - start > 1 {
             for (zero_index, zero) in features.iter_mut().enumerate().take(index).skip(start) {
@@ -577,6 +804,268 @@ mod tests {
             }),
         ];
         assert_eq!(expected, apply(features)[1].chain_flag);
+    }
+
+    #[rstest]
+    #[case("助詞", "*", "の", "*", "助動詞%F1/*")]
+    #[case("名詞", "非自立", "の", "動詞%F2@1/助動詞%F2@0", "助動詞%F1/動詞%F2@1")]
+    #[case("助詞", "*", "と", "形容詞%F1", "助動詞%F1/形容詞%F1")]
+    #[case("助詞", "*", "が", "形容詞%F1", "形容詞%F1")]
+    fn particle_after_nai_keeps_negative_nucleus(
+        #[case] pos: &str,
+        #[case] pos_group1: &str,
+        #[case] orig: &str,
+        #[case] chain_rule: &str,
+        #[case] expected: &str,
+    ) {
+        let features = vec![
+            node("ない", "助動詞", "*", "ナイ"),
+            with(node(orig, pos, pos_group1, "ノ"), |f| {
+                f.chain_rule = chain_rule.to_owned();
+            }),
+        ];
+        assert_eq!(expected, apply(features)[1].chain_rule);
+    }
+
+    #[rstest]
+    #[case(&[("放っ", "動詞"), ("て", "助詞"), ("おく", "動詞")], 0)]
+    #[case(&[("放っ", "動詞"), ("とく", "動詞")], 0)]
+    #[case(&[("放っ", "動詞"), ("た", "助動詞")], 2)]
+    fn houtte_oku_becomes_heiban(#[case] words: &[(&str, &str)], #[case] expected: i32) {
+        let features = words
+            .iter()
+            .map(|&(s, pos)| mora(node(s, pos, "自立", "ホーッ"), 2, 3))
+            .collect::<Vec<_>>();
+        assert_eq!(expected, apply(features)[0].acc);
+    }
+
+    #[rstest]
+    // 守ろう
+    #[case(2, &[], "動詞%F4@0/特殊助動詞%F2@0")]
+    // 盛ろうとする: 平板の動詞に「と」「する」が続く
+    #[case(0, &[("と", "助詞"), ("する", "動詞")], "*")]
+    // 守ろうとする: 起伏の動詞は「と」「する」が続いても変える
+    #[case(2, &[("と", "助詞"), ("する", "動詞")], "動詞%F4@0/特殊助動詞%F2@0")]
+    fn volitional_u_lowers_after_preceding_mora(
+        #[case] acc: i32,
+        #[case] following: &[(&str, &str)],
+        #[case] expected: &str,
+    ) {
+        let mut features = vec![
+            with(
+                mora(node("守ろ", "動詞", "自立", "マモロ"), acc, 3),
+                |f| {
+                    f.cform = "未然ウ接続".to_owned();
+                },
+            ),
+            with(node("う", "助動詞", "*", "ー"), |f| {
+                f.orig = "う".to_owned();
+            }),
+        ];
+        features.extend(following.iter().map(|&(s, pos)| node(s, pos, "*", "ト")));
+        assert_eq!(expected, apply(features)[1].chain_rule);
+    }
+
+    #[rstest]
+    // 聞かせない
+    #[case(0, "ない", "*", 0, "動詞%F1/形容詞%F2")]
+    // 書かせない: 起伏の動詞は変えない
+    #[case(2, "ない", "*", 1, "動詞%F2@0/形容詞%F2")]
+    // 聞かせる
+    #[case(0, "", "基本形", 0, "")]
+    // 聞かせます: 付属語の規則に任せる
+    #[case(0, "ます", "連用形", 1, "動詞%F2@0/形容詞%F2")]
+    fn causative_after_heiban_verb_becomes_heiban(
+        #[case] verb_acc: i32,
+        #[case] auxiliary: &str,
+        #[case] cform: &str,
+        #[case] expected_acc: i32,
+        #[case] expected_chain_rule: &str,
+    ) {
+        let mut features = vec![
+            mora(node("聞か", "動詞", "自立", "キカ"), verb_acc, 2),
+            with(mora(node("せ", "動詞", "接尾", "セ"), 1, 1), |f| {
+                f.orig = "せる".to_owned();
+                f.cform = cform.to_owned();
+            }),
+        ];
+        if !auxiliary.is_empty() {
+            features.push(with(node(auxiliary, "助動詞", "*", "ナイ"), |f| {
+                f.chain_rule = "動詞%F2@0/形容詞%F2".to_owned();
+            }));
+        }
+        let actual = apply(features);
+        assert_eq!(expected_acc, actual[1].acc);
+        if !auxiliary.is_empty() {
+            assert_eq!(expected_chain_rule, actual[2].chain_rule);
+        }
+    }
+
+    #[rstest]
+    // 三分の何
+    #[case(&["三分", "の", "何"], true)]
+    #[case(&["何分", "の", "何"], true)]
+    // 五分の何もない時間
+    #[case(&["五分", "の", "何", "も"], false)]
+    // 千分の何がし
+    #[case(&["千分", "の", "何", "が", "し"], false)]
+    fn fraction_numerator_nani_becomes_nan(#[case] strings: &[&str], #[case] expected: bool) {
+        let features = strings
+            .iter()
+            .map(|&s| match s {
+                "の" => node(s, "助詞", "連体化", "ノ"),
+                "何" => node(s, "名詞", "代名詞", "ナニ"),
+                s if s.ends_with('分') => mora(node(s, "名詞", "数", "サンプン"), 0, 4),
+                s => node(s, "助詞", "*", s),
+            })
+            .collect::<Vec<_>>();
+        let actual = apply(features);
+        assert_eq!(expected, actual[2].pron == "ナン");
+        if expected {
+            assert_eq!(
+                // 分子の「何」の結合規則は、分数を1つの句にする規則で`C1`になる
+                ("数", 1, 2, "C1"),
+                (
+                    &*actual[2].pos_group1,
+                    actual[2].acc,
+                    actual[2].mora_size,
+                    &*actual[2].chain_rule
+                ),
+            );
+            assert_eq!("サンブン", actual[0].pron);
+        }
+    }
+
+    #[rstest]
+    fn fraction_is_one_accent_phrase() {
+        // 三分の一: 1語の分母は核をなくし、分子までつなげる
+        let features = vec![
+            mora(node("三分", "名詞", "数", "サンプン"), 3, 4),
+            node("の", "助詞", "連体化", "ノ"),
+            mora(node("一", "名詞", "数", "イチ"), 2, 2),
+        ];
+        let actual = apply(features);
+        assert_eq!(
+            [(0, -1, "*"), (0, 1, "*"), (2, 1, "C1")],
+            [0, 1, 2].map(|i| (actual[i].acc, actual[i].chain_flag, &*actual[i].chain_rule)),
+        );
+    }
+
+    #[rstest]
+    fn separate_fraction_counter_becomes_f5() {
+        // 3分の1
+        let features = vec![
+            node("３", "名詞", "数", "サン"),
+            mora(node("分", "名詞", "接尾", "フン"), 1, 2),
+            node("の", "助詞", "連体化", "ノ"),
+            node("１", "名詞", "数", "イチ"),
+        ];
+        let actual = apply(features);
+        assert_eq!(("F5", 1), (&*actual[1].chain_rule, actual[1].acc));
+        assert_eq!((1, "C1"), (actual[3].chain_flag, &*actual[3].chain_rule));
+    }
+
+    #[rstest]
+    #[case("ｇ", "", Some(("グラム", 1, 3, "C1")))]
+    #[case("ｍ", "先", Some(("メートル", 0, 4, "C2")))]
+    #[case("ｔ", "", Some(("トン", 1, 2, "C3")))]
+    #[case("ｌ", "", Some(("リットル", 0, 4, "C2")))]
+    #[case("ｍ", "＋", None)]
+    #[case("ｍ", "+1", None)]
+    #[case("ｋ", "", None)]
+    fn unit_letter_after_numeral_becomes_counter(
+        #[case] letter: &str,
+        #[case] following: &str,
+        #[case] expected: Option<(&str, i32, i32, &str)>,
+    ) {
+        let mut features = vec![
+            node("四千", "名詞", "数", "ヨンセン"),
+            node(letter, "記号", "アルファベット", letter),
+        ];
+        if !following.is_empty() {
+            features.push(node(following, "名詞", "一般", "サキ"));
+        }
+        let actual = apply(features);
+        let unit = &actual[1];
+        match expected {
+            Some((read, acc, mora_size, chain_rule)) => assert_eq!(
+                (
+                    "名詞",
+                    "接尾",
+                    "助数詞",
+                    read,
+                    read,
+                    acc,
+                    mora_size,
+                    chain_rule
+                ),
+                (
+                    &*unit.pos,
+                    &*unit.pos_group1,
+                    &*unit.pos_group2,
+                    &*unit.read,
+                    &*unit.pron,
+                    unit.acc,
+                    unit.mora_size,
+                    &*unit.chain_rule,
+                ),
+            ),
+            None => assert_eq!("記号", unit.pos),
+        }
+    }
+
+    #[rstest]
+    // 「〇一二〇-九九九-〇〇〇」の最後の組
+    #[case(&["九", "−", "〇", "〇", "〇"], "ゼロ")]
+    // 「一，〇〇〇」
+    #[case(&["一", "，", "〇", "〇", "〇"], "ゼロ")]
+    #[case(&["町", "−", "〇", "〇"], "マル")]
+    fn circles_after_number_separator_become_zero(
+        #[case] strings: &[&str],
+        #[case] expected: &str,
+    ) {
+        let features = strings
+            .iter()
+            .map(|&s| match s {
+                "−" | "，" => node(s, "記号", "一般", "、"),
+                "町" => node(s, "名詞", "一般", "マチ"),
+                s => node(s, "名詞", "数", "レー"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(expected, apply(features)[2].pron);
+    }
+
+    #[rstest]
+    fn filler_starts_new_accent_phrases() {
+        // 東京タワーえーとスカイツリー
+        let features = vec![
+            node("タワー", "名詞", "一般", "タワー"),
+            node("えーと", "フィラー", "*", "エート"),
+            node("スカイツリー", "名詞", "固有名詞", "スカイツリー"),
+            node("だ", "助動詞", "*", "ダ"),
+        ];
+        let actual = apply(features);
+        assert_eq!([-1, 0, 0, -1], [0, 1, 2, 3].map(|i| actual[i].chain_flag),);
+    }
+
+    #[rstest]
+    fn independent_prefix_splits_before_chaining() {
+        // 当大学病院
+        let features = vec![
+            node("当", "接頭詞", "名詞接続", "トー"),
+            node("大学", "名詞", "一般", "ダイガク"),
+            node("病院", "名詞", "一般", "ビョーイン"),
+        ];
+        let actual = apply(features);
+        assert_eq!([-1, 0, -1], [0, 1, 2].map(|i| actual[i].chain_flag));
+        let actual = super::apply_original_rule_before_chaining(
+            vec![
+                node("当", "接頭詞", "名詞接続", "トー"),
+                node("大学", "名詞", "一般", "ダイガク"),
+            ],
+            false,
+        );
+        assert_eq!(-1, actual[1].chain_flag);
     }
 
     #[rstest]

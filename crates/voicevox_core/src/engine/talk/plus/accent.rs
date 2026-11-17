@@ -1,4 +1,4 @@
-// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
+// Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ v0.4.1-post10 (b312c6f)
 // (`pyopenjtalk/__init__.py`: `modify_filler_accent`,
 // `pyopenjtalk/utils.py`: `split_prefix_accent_phrase`, `retreat_acc_nuc`,
 // `modify_acc_after_chaining`)
@@ -20,30 +20,26 @@ fn is_phrase_head(feature: &NjdFeature) -> bool {
     matches!(feature.chain_flag, 0 | -1)
 }
 
-/// フィラーのアクセント核を補正し、直後の名詞が前のアクセント句へ連結されるのを防ぐ。
+/// フィラーのアクセント核がモーラ数を超えている場合に平板へ直す。
+///
+/// フィラーとその直後の名詞を別のアクセント句にする処理は、核の計算より前に
+/// `before_chaining::apply_original_rule_before_chaining`が行う。
 pub(super) fn modify_filler_accent(mut features: Vec<NjdFeature>) -> Vec<NjdFeature> {
-    let mut is_after_filler = false;
     for feature in &mut features {
-        if feature.pos == "フィラー" {
-            if feature.acc > feature.mora_size {
-                feature.acc = 0;
-            }
-            is_after_filler = true;
-        } else if is_after_filler {
-            if feature.pos == "名詞" {
-                feature.chain_flag = 0;
-            }
-            is_after_filler = false;
+        if feature.pos == "フィラー" && feature.acc > feature.mora_size {
+            feature.acc = 0;
         }
     }
     features
 }
 
 /// 「本論文」「当ホテル」のような指示的な漢語の接頭辞の後ろの語を、独立したアクセント句にする。
+///
+/// NJDが複合語の核を計算する前に呼び出し、接頭辞の後ろの句の核を計算させる。
 pub(super) fn split_prefix_accent_phrase(mut features: Vec<NjdFeature>) -> Vec<NjdFeature> {
     for i in 1..features.len() {
         let (previous, current) = (&features[i - 1], &features[i]);
-        if current.chain_flag == 1
+        if current.chain_flag != 0
             && previous.pos == "接頭詞"
             && INDEPENDENT_PREFIXES.contains(&&*previous.string)
         {
@@ -75,10 +71,13 @@ pub(super) fn retreat_acc_nuc(mut features: Vec<NjdFeature>) -> Vec<NjdFeature> 
             continue;
         }
 
+        // 拗音の小書きと無声化記号「’」は拍に数えないので外してから、核の拍を位置で引く
+        // 「アサヒ’ソーゴービョーイン」の「’」を残すと、核より後ろの拍が1文字ずれて長音を核と
+        // 取り違える
         let mut pron = feature
             .pron
             .chars()
-            .filter(|&c| !SMALL_KANA.contains(c))
+            .filter(|&c| !SMALL_KANA.contains(c) && c != '’')
             .collect::<Vec<_>>();
         if pron.is_empty() {
             pron = feature.pron.chars().collect();
@@ -89,10 +88,6 @@ pub(super) fn retreat_acc_nuc(mut features: Vec<NjdFeature>) -> Vec<NjdFeature> 
             && features
                 .get(index + 1)
                 .is_some_and(|next| next.chain_flag == 1 && next.chain_rule == "C3");
-        // 無声化記号を拍数から除き、前部末の拍とその直前の母音を調べる
-        if is_c3_boundary {
-            pron.retain(|&c| c != '’');
-        }
         // 核がモーラ数を超える場合は先頭の拍を見る
         let Some(&nucleus) = pron.get(acc as usize - 1).or(pron.first()) else {
             acc = -1;
@@ -181,11 +176,11 @@ mod tests {
     }
 
     #[rstest]
-    // 句の長さを超える核を平板にし、直後の名詞を新しいアクセント句にする
+    // 句の長さを超える核を平板にする（句の区切りは結合の前に`before_chaining`が決める）
     #[case(
         "えーと フィラー * * * えーと エート エート 5 3 C1 -1
          東京 名詞 固有名詞 * * 東京 トウキョウ トーキョー 0 4 C2 1",
-        &[(0, -1), (0, 0)],
+        &[(0, -1), (0, 1)],
     )]
     // 名詞以外は連結を変えない
     #[case(
@@ -202,6 +197,12 @@ mod tests {
     #[case(
         "本 接頭詞 名詞接続 * * 本 ホン ホン 1 1 P1 -1
          論文 名詞 一般 * * 論文 ロンブン ロンブン 0 4 C1 1",
+        &[(1, -1), (0, 0)],
+    )]
+    // 結合の前（`chain_flag == -1`）でも分ける
+    #[case(
+        "当 接頭詞 名詞接続 * * 当 トウ トー 1 2 P1 -1
+         大学 名詞 一般 * * 大学 ダイガク ダイガク 0 4 C1 -1",
         &[(1, -1), (0, 0)],
     )]
     // 語彙的に融合する接頭辞はそのまま
@@ -242,6 +243,10 @@ mod tests {
          市 名詞 接尾 * * 市 シ シ 1 1 C3 1",
         &[3, 1],
     )]
+    // 無声化記号は拍に数えない（「旭総合病院」の「アサヒ’ソーゴー」の長音上の核をずらす）
+    #[case("旭総合 名詞 固有名詞 * * 旭総合 アサヒソウゴウ アサヒ’ソーゴー 5 6 C2 -1", &[4])]
+    // 小書きの「ヮ」も拍に数えない
+    #[case("クヮン 名詞 一般 * * クヮン クヮン クヮン 2 2 * -1", &[1])]
     // 拗音は1モーラとして数え、長音上の核をずらす
     #[case("東京 名詞 固有名詞 * * 東京 トウキョウ トーキョー 4 4 C2 -1", &[3])]
     fn retreat_acc_nuc_works(#[case] features: &str, #[case] expected: &[i32]) {

@@ -202,7 +202,27 @@ fn run_text_frontend(
         &mut katakana_english::kanalizer_to_kana,
         &mut |kana| run_njd(mecab, njd, kana),
     )?;
-    plus::apply_postprocessing(features, &mut |text| run_njd(mecab, njd, text))
+    plus::apply_postprocessing(features, &mut Stages { mecab, njd })
+}
+
+/// 後処理から使うOpen JTalkの段階。
+struct Stages<'a> {
+    mecab: &'a mut Mecab,
+    njd: &'a mut Njd,
+}
+
+impl plus::NjdStages for Stages<'_> {
+    fn reanalyze(&mut self, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
+        run_njd(self.mecab, self.njd, text)
+    }
+
+    fn set_unvoiced_vowel(&mut self, features: &[NjdFeature]) -> Vec<NjdFeature> {
+        self.njd.set_features(features);
+        self.njd.set_unvoiced_vowel();
+        let features = self.njd.features();
+        self.njd.refresh();
+        features
+    }
 }
 
 /// pyopenjtalk-plusの`OpenJTalk.run_frontend`に相当する、MeCabとNJDの全段階を行う。
