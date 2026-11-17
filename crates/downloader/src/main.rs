@@ -83,7 +83,7 @@ static OPEN_JTALK_DIC_REPO: LazyLock<RepoName> = LazyLock::new(|| RepoName {
     owner: "linka-admin".to_owned(),
     repo: "open_jtalk".to_owned(),
 });
-static OPEN_JTALK_DIC_VERSION: LazyLock<Version> = LazyLock::new(|| "0.1.0".parse().unwrap());
+static OPEN_JTALK_DIC_VERSION: LazyLock<Version> = LazyLock::new(|| "0.3.0".parse().unwrap());
 const OPEN_JTALK_DIC_TAG_PREFIX: &str = "plus-dic-";
 const OPEN_JTALK_DIC_FILE: &str = "open_jtalk_dic_utf_8-1.11.tar.gz";
 

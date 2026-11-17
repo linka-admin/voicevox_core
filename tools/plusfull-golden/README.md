@@ -37,9 +37,13 @@ pyopenjtalk.run_frontend(text)        # NJD features (run_marine=False, other op
 | `sudachidict-core` | 20260723.1 | Same; the Sudachi dictionary content changes readings |
 | `onnxruntime` | 1.30.0 | `predict_nani=True` (default): an ONNX model picks ナニ/ナン for standalone 「何」. Without onnxruntime pyopenjtalk-plus prints a warning and always uses ナニ |
 
-`1e4f83b` is 53 commits ahead of `fe71dac` (2026-10-07, the open_jtalk CORE built before post10: number
-readings, then a fix that makes dictionary builds read the CSVs in a fixed order). The goldens assume CORE
-builds the same open_jtalk as the pinned pyopenjtalk-plus.
+VOICEVOX CORE builds tsukumijima/open_jtalk at `80f8c72` (2026-10-22), two commits after post10's `1e4f83b`
+(a multibyte out-of-bounds read fix in text2mecab and a 「千円」 accent fix).
+
+CORE's Rust port of the post-processing follows pyopenjtalk-plus `3310e63`. With the post10 goldens and
+plus-dic-0.3.0, `matches_pyopenjtalk_plus_golden` matches 34/35 (conversation), 406/424 (ita) and 226/243
+(postprocessing): most of the 36 differences are post10's new Python rules (devoicing of ヒト, heiban for a
+trailing ない, 主 アルジ/ヌシ, …) that are not ported yet.
 
 `sudachipy` / `sudachidict-core` are hard dependencies of pyopenjtalk-plus, so
 the Sudachi step is always active with the defaults. `onnxruntime` is only the
