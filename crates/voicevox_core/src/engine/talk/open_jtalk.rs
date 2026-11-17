@@ -238,6 +238,12 @@ impl plus::NjdStages for Stages<'_> {
         self.njd.refresh();
         features
     }
+
+    fn phrase_accent(&mut self, mecab_features: &[String]) -> anyhow::Result<i32> {
+        let features = run_njd_from_mecab(self.njd, mecab_features)?;
+        self.njd.refresh();
+        Ok(features.first().map_or(0, |f| f.acc))
+    }
 }
 
 /// [`run_njd`]に加え、顔文字を読みも発音も持たない1つのノードにまとめる。
@@ -817,6 +823,102 @@ mod tests {
     #[case("ありがとう m(_ _)m", "アリ'ガトオ")]
     #[case("ゝ", "")]
     fn extract_fullcontext_silences_kaomoji(#[case] text: &str, #[case] expected: &str) {
+        let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let actual = super::super::extract_full_context_label(&open_jtalk, text)
+            .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+            .unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    /// 読みが複数ある漢字1文字の語を、pyopenjtalk-plus v0.4.1-post10がSudachiで決める読みで読む
+    /// （`plus::kanji_yomi`）。期待値はpyopenjtalk-plus v0.4.1-post10（Sudachiあり、同梱の辞書）の
+    /// 出力。
+    #[rstest]
+    #[case("この方", "コノ'カタ")]
+    #[case("あの方は彼の婚約者です。", "アノ'カタワ/カ'レノ/コンヤ_クシャデ'_ス")]
+    #[case(
+        "ヘンリーさんという方があなたにお目にかかりたいとおっしゃっています。",
+        "ヘ'ンリイサント/イウ'カタガ/アナ'タニ/オメニカカリタ'イト/オッシャッテイマ'_ス"
+    )]
+    #[case(
+        "参加できなかった方は、この機会にぜひご視聴ください。",
+        "サンカ'/デキナカッタ'ホオワ、コノ'/キ'カイニ/ゼ'ヒ/ゴ_シチョオクダサイ'"
+    )]
+    #[case(
+        "新しいの買った方がいいかなぁ。",
+        "アタラシ'イノ/カッタ'ホオガ/イ'イカナア"
+    )]
+    #[case("こんな風にやってね。", "コンナ'/フウニ'/ヤ'ッテネ")]
+    #[case(
+        "そんな風に振る舞うとは彼は頭がおかしいにちがいない。",
+        "ソンナ'/フウニ'/フルマ'ウトワ/カ'レワ/アタマ'ガ/オカシ'イニ/チガイナイ'"
+    )]
+    #[case("ひどい風が吹いている。", "ヒド'イ/カゼガ'/フ'イテイル")]
+    #[case(
+        "ある種の動物はどんどん数が減ってきている。",
+        "ア'ル/シュ'ノ/ドオブツワ'/ド'ンドン/カ'ズガ/ヘッテ_キテイル'"
+    )]
+    #[case(
+        "この種の仕事には大変な根気が必要とされる。",
+        "コノ'/シュ'ノ/シゴトニワ'/タイヘンナ'/コンキガ'/_ヒツヨオトサレル'"
+    )]
+    #[case(
+        "その農民は畑に麦の種をまいた。",
+        "ソノ'/ノオミンワ'/ハタケニ'/ム'ギノ/タ'ネオ/マ'イタ"
+    )]
+    #[case("abの値を求めなさい。", "エ'イ/ビ'イ/ノ'/アタイオ'/モトメナサ'イ")]
+    #[case(
+        "この本はもっと安い値で買った。",
+        "コノ'/ホ'ンワ/モ'ット/ヤス'イ/アタイデ'/カッタ'"
+    )]
+    #[case("切望しつつ、主を待つ。", "セツボオ_シツ'ツ、ヌ'シオ/マ'ツ")]
+    #[case(
+        "男性が一家の主であるということはアメリカ社会に当てはまる。",
+        "ダンセエガ'/イ'ッカノ/ヌ'シデアルト/イウ'コトワ/アメリカシャ'カイニ/アテハマ'ル"
+    )]
+    #[case(
+        "この国の主な産物の１つはコーヒーだ。",
+        "コノ'/クニノ'/オ'モナ/サンブツノ'/_ヒト'ツワ/コオヒ'イダ"
+    )]
+    #[case(
+        "この物質は主に水素と酸素から出来ている。",
+        "コノ'/ブッ_シツワ'/オ'モニ/ス'イソト/サ'ンソカラ/デ_キテイル'"
+    )]
+    #[case("このドレスは高そうだ。", "コノ'/ド'レスワ/タカ'ソオダ")]
+    #[case(
+        "この表から食べたいものを選べます。",
+        "コノ'/ヒョウカラ'/タベタイモノオ'/エラベマ'_ス"
+    )]
+    #[case(
+        "次の表で明らかにされている。",
+        "ツギ'ノ/ヒョウデ'/アキラカニサレテイル'"
+    )]
+    #[case(
+        "青空の下、風が心地よく吹き抜けた。",
+        "アオゾ'ラノ/モト'、カゼガ'/ココチヨ'_ク/フキヌ'ケタ"
+    )]
+    #[case(
+        "キーはマットの下にあります。",
+        "キ'イワ/マ'ットノ/_シタニ'/アリマ'_ス"
+    )]
+    #[case(
+        "この戦いの後ナポレオンはヨーロッパの支配者になった。",
+        "コノ'/タタカイノ'/アト'/ナポレオンワ'/ヨオロ'ッパノ/_シハイシャニ'/ナ'ッタ"
+    )]
+    #[case("後で食べてもいい？", "ア'トデ/タ'ベテモ/イ'イ？")]
+    #[case(
+        "過つは人の性、許すは神の心",
+        "アヤマ'ツワ/_ヒトノ'/セ'イ、ユル'スワ/カ'ミノ/ココ'ロ"
+    )]
+    #[case(
+        "彼は労をいとわず私を助けてくれた。",
+        "カ'レワ/ロ'ウオ/イトワ'ズ/ワタシオ'/タス'ケテクレタ"
+    )]
+    #[case("人は見かけによらない。", "_ヒトワ'/ミカケニ'/ヨラナイ'")]
+    fn extract_fullcontext_reads_multi_read_kanji_like_sudachi(
+        #[case] text: &str,
+        #[case] expected: &str,
+    ) {
         let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
         let actual = super::super::extract_full_context_label(&open_jtalk, text)
             .map(|accent_phrases| super::super::create_kana(&accent_phrases))

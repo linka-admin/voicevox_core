@@ -17,12 +17,12 @@ mod devoicing;
 mod itaiji;
 mod itaiji_map;
 mod kana;
+mod kanji_yomi;
 mod kaomoji;
 mod known_symbols;
 mod loanword_kana;
 mod mecab_features;
 mod mecab_morphs;
-mod multi_read_kanji;
 mod number_boundary;
 mod odori;
 mod reading;
@@ -67,6 +67,10 @@ pub(super) trait NjdStages {
 
     /// `njd_set_unvoiced_vowel`だけを通す。pyopenjtalk-plusの`OpenJTalk.set_unvoiced_vowel`。
     fn set_unvoiced_vowel(&mut self, features: &[NjdFeature]) -> Vec<NjdFeature>;
+
+    /// MeCabの特徴量の列をNJDの全段階で解析し、先頭のアクセント核を返す。pyopenjtalk-plusの
+    /// `OpenJTalk.run_njd_from_mecab`。
+    fn phrase_accent(&mut self, mecab_features: &[String]) -> anyhow::Result<i32>;
 }
 
 /// NJDの全段階（`njd_set_long_vowel`まで）の後に適用する後処理。
@@ -75,7 +79,8 @@ pub(super) trait NjdStages {
 /// 相当するが、次の処理は行わない。
 ///
 /// - ONNXモデルによる「何」の読みの推定（`predict_nani_reading`）
-/// - Sudachiによる読みの補正（`modify_kanji_yomi`と、`read_unknown_kanji`の語単位の読み）
+/// - Sudachiによる読みの補正（`modify_kanji_yomi`は規則で近似する。`read_unknown_kanji`の語単位の
+///   読みは行わない）
 /// - marineによるアクセントの推定
 /// - ユーザー辞書の読み保護
 pub(super) fn apply_postprocessing(
@@ -87,7 +92,9 @@ pub(super) fn apply_postprocessing(
     // フィラーのアクセントは読み変更より先に補正する
     let features = accent::modify_filler_accent(features);
     // pyopenjtalk-plusでSudachiによる読みの上書き（`modify_kanji_yomi`）が担う位置
-    let features = multi_read_kanji::release_multi_read_kanji_devoicing(features);
+    let features = kanji_yomi::modify_kanji_yomi(features, &mut |mecab_features| {
+        stages.phrase_accent(mecab_features)
+    })?;
     let features = reading::suppress_unnatural_auxiliary_u_long_vowel(features);
     let features = context_reading::modify_context_reading(features);
     let features = reading::modify_old_province_yomi(features);

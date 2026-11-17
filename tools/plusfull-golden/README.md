@@ -41,9 +41,16 @@ VOICEVOX CORE builds tsukumijima/open_jtalk at `80f8c72` (2026-10-22), two commi
 (a multibyte out-of-bounds read fix in text2mecab and a 「千円」 accent fix).
 
 CORE's Rust port of the frontend follows pyopenjtalk-plus `v0.4.1-post10`. With the post10 goldens and
-plus-dic-0.3.0, `matches_pyopenjtalk_plus_golden` matches 35/35 (conversation), 423/424 (ita) and 242/243
-(postprocessing). The two differences are Sudachi readings (`use_sudachi_kanji_yomi`), which CORE does
-not port: 「切望しつつ、主を待つ。」 (ヌシ, CORE reads the dictionary's アルジ) and 「この方」 (カタ, CORE reads ホウ).
+plus-dic-0.3.0, `matches_pyopenjtalk_plus_golden` matches 35/35 (conversation), 424/424 (ita) and 243/243
+(postprocessing).
+
+CORE does not bundle Sudachi. `use_sudachi_kanji_yomi` (`modify_kanji_yomi`: single-kanji words of
+`MULTI_READ_KANJI_LIST` get Sudachi's reading) is approximated by context rules in
+`engine::talk::plus::kanji_yomi`, mined from post10's output with and without Sudachi on Tatoeba sentences
+(「この方」 カタ, 「こんな風」 フウ, 「この種の」 シュ, 「主」 ヌシ, 「値」 アタイ, …). On 7,292 held-out Tatoeba
+sentences containing those kanji, CORE's kana matches post10 for 98.3% of the sentences (97.8% before the
+rules); of the 110 sentences whose reading Sudachi changes, 48 match. Sudachi's statistical choices without a
+contextual rule (e.g. money 「金」 as キン, 「堪忍袋の緒」 as イトグチ) are not reproduced.
 
 `sudachipy` / `sudachidict-core` are hard dependencies of pyopenjtalk-plus, so
 the Sudachi step is always active with the defaults. `onnxruntime` is only the
