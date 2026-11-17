@@ -50,7 +50,8 @@ CORE does not bundle Sudachi. `use_sudachi_kanji_yomi` (`modify_kanji_yomi`: sin
 (「この方」 カタ, 「こんな風」 フウ, 「この種の」 シュ, 「主」 ヌシ, 「値」 アタイ, …). On 7,292 held-out Tatoeba
 sentences containing those kanji, CORE's kana matches post10 for 98.3% of the sentences (97.8% before the
 rules); of the 110 sentences whose reading Sudachi changes, 48 match. Sudachi's statistical choices without a
-contextual rule (e.g. money 「金」 as キン, 「堪忍袋の緒」 as イトグチ) are not reproduced.
+contextual rule (e.g. money 「金」 as キン, 「堪忍袋の緒」 as イトグチ) are not reproduced, and 「方」 is read カタ
+only when it clearly means a person (comparative 「その方がいい」 stays ホウ, unlike Sudachi).
 
 `sudachipy` / `sudachidict-core` are hard dependencies of pyopenjtalk-plus, so
 the Sudachi step is always active with the defaults. `onnxruntime` is only the

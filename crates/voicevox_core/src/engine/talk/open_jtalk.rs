@@ -926,6 +926,41 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    /// 比較の「方」はホウ、人を指すとはっきり分かる「方」だけカタと読む。「主な」「主に」はオモ、
+    /// 「堪忍袋の緒」はオ。読みはオーナーの確認による（Sudachiと異なる箇所がある）。
+    #[rstest]
+    #[case("主な", "オ'モナ")]
+    #[case("主に", "オ'モニ")]
+    #[case("主な理由", "オ'モナ/リユウ'")]
+    #[case("主に使う", "オ'モニ/_ツカウ'")]
+    #[case("その方が楽しい", "ソノ'ホオガ/タノシ'イ")]
+    #[case("金銭", "キ'ンセン")]
+    #[case("堪忍袋の緒", "カンニンブ'クロノ/オ'")]
+    #[case("堪忍袋の緒が切れた。", "カンニンブ'クロノ/オガ'/キ'レタ")]
+    #[case("その方がいい", "ソノ'ホオガ/イ'イ")]
+    #[case("この方が早い", "コノ'ホオガ/ハヤ'イ")]
+    #[case("そっちの方が楽しい", "ソッチノ'ホオガ/タノシ'イ")]
+    #[case("出た方がいいよ", "デタ'ホオガ/イ'イヨ")]
+    #[case("早めに出た方がいいよ", "ハヤメニ'/デタ'ホオガ/イ'イヨ")]
+    #[case("その方が楽だよ", "ソノ'ホオガ/ラク'ダヨ")]
+    #[case("歩くより車の方が早い", "アル'クヨリ/クルマノ'ホオガ/ハヤ'イ")]
+    #[case("この方は田中さんです。", "コノ'カタワ/タナカサンデ'_ス")]
+    #[case("この方です。", "コノ'カタデ_ス")]
+    #[case("あの方に聞いてください。", "アノ'カタニ/キイテクダサイ'")]
+    #[case("どの方ですか？", "ドノ'カタデ_スカ？")]
+    #[case("山田さんという方が来ました。", "ヤマダサント'/イウ'カタガ/キマ'_シタ")]
+    #[case(
+        "お客様の中に医師の方はいらっしゃいますか？",
+        "オキャ_クサマノナカニ'/イシノ'カタワ/イラッシャイマ'_スカ？"
+    )]
+    fn extract_fullcontext_reads_kata_only_for_people(#[case] text: &str, #[case] expected: &str) {
+        let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let actual = super::super::extract_full_context_label(&open_jtalk, text)
+            .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+            .unwrap();
+        assert_eq!(expected, actual);
+    }
+
     /// `tools/plusfull-golden`で生成したpyopenjtalk-plusの解析結果と、AquesTalk風記法で一致するか。
     ///
     /// pyopenjtalk-plusのシステム辞書を環境変数`PLUSFULL_DIC_DIR`で指定して実行する。

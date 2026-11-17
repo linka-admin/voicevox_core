@@ -11,13 +11,15 @@
 //! - 読みを変えない形態素も、発音を読みの仮名で上書きする（Sudachiの読みは長音にしない仮名なので、
 //!   「低」は「テー」でなく「テイ」になる。「方」の「ホウ」だけは発音を「ホー」にする）。発音から
 //!   無声化記号が消えるので、無声化は[`super::devoicing`]が判定し直す。
-//! - 前後の語で読みが決まる語（「この方」のカタ、「こんな風」のフウ、「この種の」のシュ、「主」の
+//! - 前後の語で読みが決まる語（人を指す「この方は」のカタ、「こんな風」のフウ、「この種の」のシュ、「主」の
 //!   ヌシ、「値」のアタイなど）は[`decide`]の規則で読みを変える。
 //! - Sudachiが接頭辞を後ろの語とまとめて1語にすると、pyopenjtalk-plusは漢字と読みを対応付けられず、
 //!   文全体で補正をしない。規則の当たらない接頭辞の対象漢字がある文は、それに倣って何もしない。
 //!
 //! Sudachiが統計的に選ぶ読みのうち、文脈の規則にならないもの（金銭の「金」をキンと読む、
-//! 「堪忍袋の緒」をイトグチと読むなど）は再現しない。
+//! 「堪忍袋の緒」をイトグチと読むなど）は再現しない。「この方」「その方」のカタも、比較の
+//! 「その方が楽しい」のホウの方が多いので、人を指すとはっきり分かる場合に限る
+//! （[`is_person_kata`]）。
 
 use open_jtalk::NjdFeature;
 
@@ -141,17 +143,8 @@ fn decide(features: &[NjdFeature], i: usize) -> Option<&'static str> {
     let (previous, next) = (at(-1), at(1));
     let feature = &features[i];
     match (&*feature.orig, &*feature.read) {
-        // 「この方」「小野さんという方が」は人を指すカタ
-        ("方", "ホウ")
-            if DEMONSTRATIVES.contains(&previous)
-                || (["いう", "言う"].contains(&previous)
-                    && [
-                        "が", "は", "に", "を", "の", "です", "で", "も", "と", "から",
-                    ]
-                    .contains(&next)) =>
-        {
-            Some("カタ")
-        }
+        // 人を指すとはっきり分かる「方」だけカタと読み、比較の「その方がいい」などは辞書のホウのまま
+        ("方", "ホウ") if is_person_kata(features, i) => Some("カタ"),
         // 「こんな風に」は様子のフウ
         ("風", "カゼ") if ["こんな", "そんな", "あんな", "どんな"].contains(&previous) => {
             Some("フウ")
@@ -189,8 +182,64 @@ fn decide(features: &[NjdFeature], i: usize) -> Option<&'static str> {
             Some("アト")
         }
         ("糞", "フン") => Some("クソ"),
+        // 「堪忍袋の緒」はオ（辞書によってはイトグチと読む）
+        ("緒", "イトグチ")
+            if previous.starts_with("堪忍袋") || (previous == "の" && at(-2) == "堪忍袋") =>
+        {
+            Some("オ")
+        }
         _ => None,
     }
+}
+
+/// 「方」が人を指す（カタと読む）とはっきり分かるか。
+///
+/// pyopenjtalk-plus（Sudachi）は「この方」「その方」をおおむねカタと読むが、「その方が楽しい」
+/// 「出た方がいい」のような比較のホウの方がずっと多い。迷う場合は辞書のホウのままにする。
+///
+/// - 比較: 「方が」の後ろに形容詞・形容動詞（「いい」「楽」「まし」など）が続くか、同じ節に
+///   「より」がある場合はホウ。
+/// - 人: 指示の連体詞の後ろで「は」「に」「の」「です」などが続くか文が終わる（「この方は田中さん
+///   です」「あの方に」「どの方」）、「〜という方」、同じ節に「いらっしゃる」「おっしゃる」などの
+///   尊敬語がある場合はカタ。
+fn is_person_kata(features: &[NjdFeature], i: usize) -> bool {
+    let next = features.get(i + 1).map_or("", |f| &*f.string);
+    let previous = i.checked_sub(1).map_or("", |j| &*features[j].string);
+    let is_clause_end = |f: &NjdFeature| f.pos == "記号";
+    let clause_before = features[..i].iter().rev().take_while(|f| !is_clause_end(f));
+    let clause_after = || features[i + 1..].iter().take_while(|f| !is_clause_end(f));
+
+    let is_comparative = clause_before
+        .chain(clause_after())
+        .any(|f| f.orig == "より")
+        || (next == "が"
+            && clause_after()
+                .skip(1)
+                .find(|f| f.pos != "副詞" && f.pos != "連体詞")
+                .is_some_and(|f| {
+                    f.pos == "形容詞"
+                        || f.pos_group1 == "形容動詞語幹"
+                        || ["まし", "楽", "好き", "安全", "得", "便利"].contains(&&*f.string)
+                }));
+    if is_comparative {
+        return false;
+    }
+    let has_honorific = clause_after().any(|f| {
+        ["いらっしゃる", "おっしゃる", "おられる", "なさる", "お見え"].contains(&&*f.orig)
+    });
+    let is_person_after_demonstrative = DEMONSTRATIVES.contains(&previous)
+        && (next.is_empty()
+            || features[i + 1].pos == "記号"
+            || [
+                "は", "に", "の", "を", "と", "も", "です", "でし", "だ", "達", "たち",
+            ]
+            .contains(&next));
+    let is_person_after_iu = ["いう", "言う"].contains(&previous)
+        && [
+            "が", "は", "に", "を", "の", "です", "で", "も", "と", "から",
+        ]
+        .contains(&next);
+    has_honorific || is_person_after_demonstrative || is_person_after_iu
 }
 
 /// pyopenjtalk-plusの`modify_kanji_yomi`がNJDに渡し直す形のMeCabの特徴量。
