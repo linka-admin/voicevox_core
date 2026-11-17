@@ -139,10 +139,19 @@ impl FullcontextExtractor for Inner {
         } = &mut *self.resources.lock().unwrap();
 
         jpcommon.refresh();
-        let features = run_frontend(mecab, njd, text)?;
+        let mut features = run_frontend(mecab, njd, text)?;
+        // pyopenjtalk-plusの`make_label`と同じく、発音が空のノード（顔文字）を除く
+        features.retain(|feature| !feature.pron.is_empty());
+        if features.is_empty() {
+            return Ok(vec![]);
+        }
         njd.set_features(&features);
         jpcommon.njd2jpcommon(njd);
         jpcommon.make_label();
+        // 読点だけの文などで音素がない場合、pyopenjtalk-plusの`make_label`は空のラベルを返す
+        if jpcommon.get_label_size() == 0 {
+            return Ok(vec![]);
+        }
         jpcommon
             .get_label_feature_to_iter()
             .ok_or(OpenjtalkFunctionError {
@@ -189,6 +198,7 @@ fn run_text_frontend(
     njd: &mut Njd,
     text: &str,
 ) -> anyhow::Result<Vec<NjdFeature>> {
+    let raw_text = text;
     let text = plus::normalize_unknown_itaiji(
         text,
         |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
@@ -200,7 +210,7 @@ fn run_text_frontend(
         |s| run_mecab(mecab, s),
     )?;
 
-    let features = run_njd(mecab, njd, &text)?;
+    let features = run_njd_silencing_kaomoji(mecab, njd, raw_text, &text)?;
     // pyopenjtalk-plusの後処理を英単語の読みにも適用するため、後処理より先に変換する
     let features = katakana_english::convert_unknown_english(
         features,
@@ -230,14 +240,59 @@ impl plus::NjdStages for Stages<'_> {
     }
 }
 
+/// [`run_njd`]に加え、顔文字を読みも発音も持たない1つのノードにまとめる。
+///
+/// pyopenjtalk-plusの`run_frontend`の顔文字の処理（`silence_kaomoji`）に相当する。`raw_text`は
+/// 異体字を置き換える前の入力。顔文字を含まない文では[`run_njd`]と同じ。
+fn run_njd_silencing_kaomoji(
+    mecab: &mut Mecab,
+    njd: &mut Njd,
+    raw_text: &str,
+    text: &str,
+) -> anyhow::Result<Vec<NjdFeature>> {
+    let parts = plus::find_kaomoji_parts(raw_text);
+    if parts.is_empty() {
+        return run_njd(mecab, njd, text);
+    }
+    let mecab_features = run_mecab(mecab, text)?;
+    let normalize_for_mecab = |s: &str| Ok(text2mecab(s).map_err(text2mecab_error)?);
+    match plus::silence_kaomoji(raw_text, &parts, text, &mecab_features, normalize_for_mecab) {
+        Some(plus::SilencedKaomoji {
+            mecab_features,
+            surfaces,
+        }) => Ok(plus::mark_kaomoji_silent(
+            run_njd_from_mecab_keeping(njd, &mecab_features, &surfaces)?,
+            &surfaces,
+        )),
+        None => run_njd_from_mecab(njd, &mecab_features),
+    }
+}
+
 /// pyopenjtalk-plusの`OpenJTalk.run_frontend`に相当する、MeCabとNJDの全段階を行う。
 fn run_njd(mecab: &mut Mecab, njd: &mut Njd, text: &str) -> anyhow::Result<Vec<NjdFeature>> {
+    let mecab_features = run_mecab(mecab, text)?;
+    run_njd_from_mecab(njd, &mecab_features)
+}
+
+/// [`run_njd`]のうち、MeCabの解析結果（[`run_mecab`]の戻り値）からNJDの全段階を行う部分。
+fn run_njd_from_mecab(njd: &mut Njd, mecab_features: &[String]) -> anyhow::Result<Vec<NjdFeature>> {
+    run_njd_from_mecab_keeping(njd, mecab_features, &[])
+}
+
+/// [`run_njd_from_mecab`]のうち、表層形が`kaomoji`の顔文字のノードを、`njd_set_pronunciation`が
+/// 読み直した品詞（「（Ｔ＿Ｔ）」を英字の読みのフィラーにするなど）から記号に戻すもの。
+fn run_njd_from_mecab_keeping(
+    njd: &mut Njd,
+    mecab_features: &[String],
+    kaomoji: &[String],
+) -> anyhow::Result<Vec<NjdFeature>> {
     njd.refresh();
-    let mecab_features = plus::apply_mecab_rules(&run_mecab(mecab, text)?);
+    let mecab_features = plus::apply_mecab_rules(mecab_features);
     njd.mecab2njd_from_features(&plus::expand_unknown_numeral_chunks(&mecab_features));
     njd.set_pronunciation();
+    let features = plus::restore_kaomoji_symbols(njd.features(), kaomoji);
     let (features, has_number_boundary) =
-        plus::apply_njd_rules_before_digit(njd.features(), &mecab_features);
+        plus::apply_njd_rules_before_digit(features, &mecab_features);
     njd.set_features(&features);
     njd.set_digit();
     if has_number_boundary {
@@ -673,6 +728,96 @@ mod tests {
             user_dict.add_word(word).unwrap();
         }
         open_jtalk.use_user_dict(&user_dict).unwrap();
+        let actual = super::super::extract_full_context_label(&open_jtalk, text)
+            .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+            .unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    /// 顔文字を読まない（pyopenjtalk-plus v0.4.1-post10の`silence_kaomoji`）。
+    ///
+    /// 入力は主にpyopenjtalk-plusの`tests/test_kaomoji.py`のもの。期待値はpyopenjtalk-plus
+    /// v0.4.1-post10（`tools/plusfull-golden`と同じ変換）の出力。顔文字と関係なく結果が異なる
+    /// もの（英字の読み、辞書の違いによるアクセント）と、次の2つは除いた。
+    ///
+    /// - 「か゛(^_^)後」: NJDの結果は同じだが、pyopenjtalk-plusは読点をまたぐアクセント句になる。
+    /// - 「前(^_^)\u{301}後」: pyopenjtalk-plusは後処理で顔文字の発音を`*`にし、「後」をゴと読む。
+    #[rstest]
+    #[case("やっほー！元気かな？ヾ(≧▽≦)ﾉ", "ヤ'ッホオ、ゲ'ン_キカナ？")]
+    #[case("コ(^_^)ーヒー", "コ'オ/ヒイ'")]
+    #[case("コー(^_^)ーヒー", "コ'オオ/ヒイ'")]
+    #[case("前(^_^)ー後", "マ'エエゴ")]
+    #[case("前(^_^)ーー後", "マ'エエエゴ")]
+    #[case("(^_^)こんにちは", "コンニチワ'")]
+    #[case("こんにちは(^_^)世界", "コンニチワ'/セ'カイ")]
+    #[case("1(^_^)2人", "イチ'/_フタリ'")]
+    #[case("です(^_^)！？", "デ'_ス？")]
+    #[case("前(^_^)。後", "マ'エ、ア'ト")]
+    #[case("前(^_^) (T_T)後", "マ'エゴ")]
+    #[case("三(^_^)軒", "サン'/ノキ'")]
+    #[case("一冊(^_^)配った", "イッサツ'/クバ'ッタ")]
+    #[case("おはよう(^^) (^^)今日は晴れです。", "オハヨオ'/キョ'オワ/ハレ'デ_ス")]
+    #[case("おはよう(^^)　(^^)今日は晴れです。", "オハヨオ'/キョ'オワ/ハレ'デ_ス")]
+    #[case("おはよう(^^)  (^^)今日は晴れです。", "オハヨオ'/キョ'オワ/ハレ'デ_ス")]
+    #[case(
+        "誰の曲ですか？ （・∀・） ♪今日は晴れです。",
+        "ダ'レノ/キョクデ'_スカ？、キョ'オワ/ハレ'デ_ス"
+    )]
+    #[case(
+        "誰の曲ですか？　（・∀・）　♪今日は晴れです。",
+        "ダ'レノ/キョクデ'_スカ？、キョ'オワ/ハレ'デ_ス"
+    )]
+    #[case(
+        "誰の曲ですか？（・ ∀ ・） ♪今日は晴れです。",
+        "ダ'レノ/キョクデ'_スカ？、キョ'オワ/ハレ'デ_ス"
+    )]
+    #[case(
+        "誰の曲ですか？m(_ _)m ♪今日は晴れです。",
+        "ダ'レノ/キョクデ'_スカ？、キョ'オワ/ハレ'デ_ス"
+    )]
+    #[case("答えは10 m(_ _)m。", "コタ'エワ/ジュ'ウ")]
+    #[case("答えは10 m(_ _ )m。", "コタ'エワ/ジュ'ウ")]
+    #[case("答えは10 ｍ（＿　＿）ｍ。", "コタ'エワ/ジュ'ウ")]
+    #[case("答えは10。", "コタ'エワ/ジュ'ウ")]
+    #[case("1 10日(^^)今日は晴れです。", "イチ'/トオカ'/キョ'オワ/ハレ'デ_ス")]
+    #[case(
+        "1 24日(^^)今日は晴れです。",
+        "イチ'/ニ'ジュウ/ヨッカ'/キョ'オワ/ハレ'デ_ス"
+    )]
+    #[case("1,000ー(^^)今日は晴れです。", "セ'ンン/キョ'オワ/ハレ'デ_ス")]
+    #[case("(a+b)", "エ'イ/タ'ス/ビ'イ")]
+    #[case("(2026年)", "ニセ'ン/ニ'ジュウ/ロク'ネン")]
+    #[case("(ﾉ)日本語(ヾ)", "ノ'、ニホンゴ'")]
+    #[case("(pH)", "ピ'イ/エ'イチ")]
+    #[case("一(^_^)々", "イチ'")]
+    #[case("仲良ｼ(^_^)", "ナ'カ/リョ'オシ")]
+    #[case("仲良ｼ(^o^)人(^o^)", "ナ'カ/リョ'オシ")]
+    #[case("pc(^_^)です", "ピイシ'イ/デ'_ス")]
+    #[case("(^_^)ノート", "ノ'オト")]
+    #[case("(^_^)つー○○○円", "マル'/レ'エエン")]
+    #[case("(^_^)つー☆5個", "ゴ'コ")]
+    #[case("㈱(^_^)後", "ゴ'")]
+    #[case("ｶﾞ(^_^)後", "ガゴ'")]
+    #[case("「_(┐「ε:)_」", "")]
+    #[case("(^_^)発車します", "ハッシャシマ'_ス")]
+    #[case("(´・ω・`)ノ", "")]
+    #[case("(^_^)", "")]
+    #[case("(-'ω')", "")]
+    #[case("(T_T)", "")]
+    #[case("(0_0)", "")]
+    #[case("(ﾉ)ω(ヾ)", "")]
+    #[case("(*>ω<)ω<*)", "")]
+    #[case("(^ω^)人(^ω^)", "")]
+    #[case("(^ω^)っ)ω^)", "")]
+    #[case("(^_^)つー○○○", "")]
+    #[case("(^_^)つ︻┳═一", "")]
+    #[case("(^_^)つー>ﾟ)))≫彡~~", "")]
+    #[case("(´・ω・`)ノ後で", "ア'トデ")]
+    #[case("今日は(｀・ω・´)ゞ頑張ります", "キョ'オワ/ガンバリマ'_ス")]
+    #[case("ありがとう m(_ _)m", "アリ'ガトオ")]
+    #[case("ゝ", "")]
+    fn extract_fullcontext_silences_kaomoji(#[case] text: &str, #[case] expected: &str) {
+        let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
         let actual = super::super::extract_full_context_label(&open_jtalk, text)
             .map(|accent_phrases| super::super::create_kana(&accent_phrases))
             .unwrap();

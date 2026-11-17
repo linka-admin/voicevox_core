@@ -17,6 +17,7 @@ mod devoicing;
 mod itaiji;
 mod itaiji_map;
 mod kana;
+mod kaomoji;
 mod known_symbols;
 mod loanword_kana;
 mod mecab_features;
@@ -33,6 +34,10 @@ use open_jtalk::NjdFeature;
 
 pub(super) use self::{
     itaiji::normalize_unknown_itaiji,
+    kaomoji::{
+        SilencedKaomoji, find_kaomoji_parts, mark_kaomoji_silent, restore_kaomoji_symbols,
+        silence_kaomoji,
+    },
     mecab_features::{apply_mecab_rules, expand_unknown_numeral_chunks},
     number_boundary::remove_number_boundaries,
     roman_numerals::normalize_roman_numerals,
