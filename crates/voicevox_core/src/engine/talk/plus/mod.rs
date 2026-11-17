@@ -4,7 +4,7 @@
 //!
 //! `pyopenjtalk.run_frontend`の既定値（`restore_unknown_katakana=True`、
 //! `modify_numeral_reading=True`）での`OpenJTalk.run_frontend`と、その前段の
-//! `normalize_unknown_itaiji`に相当する。[`apply_postprocessing`]はpyopenjtalk-plusの
+//! `normalize_unknown_itaiji`、`normalize_roman_numerals`（v0.4.1-post10）に相当する。[`apply_postprocessing`]はpyopenjtalk-plusの
 //! 同名の後処理のうち、モデルや外部辞書を使わない規則に相当する。
 //!
 //! ここにある関数はすべて特徴量の列に対する純粋な関数で、Open JTalkの呼び出しは
@@ -20,10 +20,12 @@ mod kana;
 mod known_symbols;
 mod loanword_kana;
 mod mecab_features;
+mod mecab_morphs;
 mod multi_read_kanji;
 mod number_boundary;
 mod odori;
 mod reading;
+mod roman_numerals;
 mod unknown_kanji;
 mod unknown_katakana;
 
@@ -33,6 +35,7 @@ pub(super) use self::{
     itaiji::normalize_unknown_itaiji,
     mecab_features::{apply_mecab_rules, expand_unknown_numeral_chunks},
     number_boundary::remove_number_boundaries,
+    roman_numerals::normalize_roman_numerals,
 };
 
 /// `njd_set_pronunciation`の後、`njd_set_digit`の前に適用する規則。

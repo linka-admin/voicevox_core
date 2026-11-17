@@ -66,7 +66,7 @@ fn unihan_reading(surface: &str) -> Option<String> {
 }
 
 /// Unihanの読みを付ける対象になるCJK統合漢字（拡張A以降と互換漢字を含む）か。
-fn is_kanji(c: char) -> bool {
+pub(super) fn is_kanji(c: char) -> bool {
     matches!(
         u32::from(c),
         0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0x20000..=0x3FFFF

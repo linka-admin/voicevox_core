@@ -1,5 +1,7 @@
 // Ported from pyopenjtalk-plus (MIT) https://github.com/tsukumijima/pyopenjtalk-plus @ 3310e63
-// (`pyopenjtalk/_itaiji_map.py`)
+// (`pyopenjtalk/_itaiji_map.py`; `pyopenjtalk/utils.py` @ v0.4.1-post10 (b312c6f): `_VARIANT_MAP`)
+
+use std::{collections::HashMap, sync::LazyLock};
 
 /// 異体字と、OpenJTalkの辞書で使われる通用字の対応。文字コード順。
 static ITAIJI_MAP: &[(char, char)] = &[
@@ -374,12 +376,34 @@ static ITAIJI_MAP: &[(char, char)] = &[
     ('𡈽', '土'),
 ];
 
+/// CJKVIの日本語の字体表から生成した、異体字と通用字の対応（`CJKVI_VARIANTS`）。
+///
+/// `cjkvi_variants.txt`は`<異体字><TAB><通用字>`の行の並びで、`#`で始まる行は注釈。
+static CJKVI_VARIANTS: LazyLock<HashMap<char, char>> = LazyLock::new(|| {
+    include_str!("cjkvi_variants.txt")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            let mut chars = line.chars();
+            let (Some(variant), Some('\t'), Some(proper), None) =
+                (chars.next(), chars.next(), chars.next(), chars.next())
+            else {
+                panic!("should be `<variant><TAB><proper>`: {line:?}");
+            };
+            (variant, proper)
+        })
+        .collect()
+});
+
 /// 異体字を通用字へ置き換える。異体字でなければ`None`。
+///
+/// 手で整えた[`ITAIJI_MAP`]を、CJKVIの字体表から生成した対応より優先する（`_VARIANT_MAP`）。
 pub(super) fn tsuyoji(c: char) -> Option<char> {
     ITAIJI_MAP
         .binary_search_by_key(&c, |&(k, _)| k)
         .ok()
         .map(|i| ITAIJI_MAP[i].1)
+        .or_else(|| CJKVI_VARIANTS.get(&c).copied())
 }
 
 #[cfg(test)]
@@ -389,7 +413,12 @@ mod tests {
     #[rstest]
     #[case('𠮷', Some('吉'))]
     #[case('亞', Some('亜'))]
+    // CJKVIの字体表から
+    #[case('濵', Some('浜'))]
+    #[case('﨑', Some('崎'))]
+    #[case('嵜', Some('崎'))]
     #[case('吉', None)]
+    #[case('a', None)]
     fn tsuyoji_works(#[case] c: char, #[case] expected: Option<char>) {
         assert_eq!(expected, super::tsuyoji(c));
     }

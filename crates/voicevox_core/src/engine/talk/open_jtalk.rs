@@ -194,6 +194,11 @@ fn run_text_frontend(
         |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
         |s| run_mecab(mecab, s),
     )?;
+    let text = plus::normalize_roman_numerals(
+        &text,
+        |s| Ok(text2mecab(s).map_err(text2mecab_error)?),
+        |s| run_mecab(mecab, s),
+    )?;
 
     let features = run_njd(mecab, njd, &text)?;
     // pyopenjtalk-plusの後処理を英単語の読みにも適用するため、後処理より先に変換する
@@ -602,6 +607,30 @@ mod tests {
     #[case("〇〇町", "マルマル'マチ")]
     // 辞書で読めない異体字は通用字にする
     #[case("𠮷野家", "ヨシノ'ヤ")]
+    #[case("黒﨑さん", "クロサ_キサン'")]
+    #[case("﨔の木", "ケヤキノ'/キ'")]
+    #[case("𡈽井さん", "ドイサン'")]
+    #[case(" 𠮷\u{3000}", "ヨ'シ")]
+    // CJKVIの字体表から生成した対応の異体字も通用字にする（pyopenjtalk-plus v0.4.1-post10）
+    #[case("濵田", "ハ'マダ")]
+    #[case("靑森", "アオ'モリ")]
+    #[case("神戶", "コ'オベ")]
+    #[case("長嵜", "ナガ'サキ")]
+    // 置き換えると漢字と並ぶ1字の語になる異体字は、置き換えずに字ごとの音読みで読む
+    #[case("齒性", "シセエ'")]
+    #[case("殼長", "カクチョオ'")]
+    #[case("貝殼", "カイガラ'")]
+    // ローマ数字は算用数字と同じ音便と和語の読みにする（pyopenjtalk-plus v0.4.1-post10）
+    #[case("Ⅰ章", "イ'ッショオ")]
+    #[case("Ⅱ日", "_フツカ'")]
+    #[case("Ⅰ人", "_ヒト'リ")]
+    #[case("ⅩⅩ", "ニ'ジュウ")]
+    #[case("第Ⅰ期", "ダ'イ/イ'ッキ")]
+    #[case("Ⅷ", "ハチ'")]
+    #[case("ロッキーⅣ", "ロッキイヨ'ン")]
+    // 隣に算用数字があるローマ数字は置き換えない
+    #[case("パートⅡ５階", "パアト'ニ/ゴカイ'")]
+    #[case("パートⅡ5階", "パアト'ニ/ゴカイ'")]
     // 読みが不明な英単語はカタカナ英語として読む
     #[case("Pythonで書く", "パ'イソンデ/カ'ク")]
     // キャメルケースは単語に分けて読み、辞書にある外来語として解析し直す
@@ -619,6 +648,31 @@ mod tests {
         #[case] expected: &str,
     ) {
         let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let actual = super::super::extract_full_context_label(&open_jtalk, text)
+            .map(|accent_phrases| super::super::create_kana(&accent_phrases))
+            .unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    // ユーザー辞書の語の中の異体字とローマ数字は置き換えず、登録した読みで読む
+    #[rstest]
+    #[case("﨑山さん。表記は﨑です。", "テ'_ストサン、ヒョ'オキワ/サキデ'_ス")]
+    #[case("Ⅲ型をⅡ日使う", "タイ_プスリ'イオ/_フツカ'/_ツカウ'")]
+    fn extract_fullcontext_keeps_user_dictionary_words_in_normalization(
+        #[case] text: &str,
+        #[case] expected: &str,
+    ) {
+        let open_jtalk = crate::blocking::OpenJtalk::new(OPEN_JTALK_DIC_DIR).unwrap();
+        let user_dict = crate::blocking::UserDict::new();
+        for (surface, pronunciation, accent_type) in
+            [("﨑山", "テスト", 1), ("Ⅲ型", "タイプスリー", 5)]
+        {
+            let word = crate::UserDictWord::builder()
+                .build(surface, pronunciation.to_owned(), accent_type)
+                .unwrap();
+            user_dict.add_word(word).unwrap();
+        }
+        open_jtalk.use_user_dict(&user_dict).unwrap();
         let actual = super::super::extract_full_context_label(&open_jtalk, text)
             .map(|accent_phrases| super::super::create_kana(&accent_phrases))
             .unwrap();
