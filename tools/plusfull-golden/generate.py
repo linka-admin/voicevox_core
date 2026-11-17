@@ -53,7 +53,7 @@ DEFAULT_MORA_MAPPINGS = (
 # fetch the dictionary sources (CSV/def files) of the same commit, because the
 # built package only ships the compiled dictionary.
 PYOPENJTALK_PLUS_REPO = "https://github.com/tsukumijima/pyopenjtalk-plus"
-PYOPENJTALK_PLUS_COMMIT = "3310e63654473ccee5d38c18a6c93129b641bf85"
+PYOPENJTALK_PLUS_COMMIT = "b312c6f41dd82a9ac8ea94096fb1d2ff4222c067"
 PYOPENJTALK_PLUS_DICT_PATH = "pyopenjtalk/dictionary"
 
 ITA_REPO_COMMIT = "994844bcac6925c900fd4ab45beab11b0b9ea7bd"

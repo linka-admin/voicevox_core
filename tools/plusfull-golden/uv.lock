@@ -242,7 +242,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "onnxruntime", specifier = "==1.30.0" },
-    { name = "pyopenjtalk-plus", extras = ["onnxruntime"], git = "https://github.com/tsukumijima/pyopenjtalk-plus?rev=3310e63654473ccee5d38c18a6c93129b641bf85" },
+    { name = "pyopenjtalk-plus", extras = ["onnxruntime"], git = "https://github.com/tsukumijima/pyopenjtalk-plus?rev=b312c6f41dd82a9ac8ea94096fb1d2ff4222c067" },
     { name = "sudachidict-core", specifier = "==20260723.1" },
     { name = "sudachipy", specifier = "==0.7.0" },
 ]
@@ -381,8 +381,8 @@ wheels = [
 
 [[package]]
 name = "pyopenjtalk-plus"
-version = "0.4.1.post9"
-source = { git = "https://github.com/tsukumijima/pyopenjtalk-plus?rev=3310e63654473ccee5d38c18a6c93129b641bf85#3310e63654473ccee5d38c18a6c93129b641bf85" }
+version = "0.4.1.post10"
+source = { git = "https://github.com/tsukumijima/pyopenjtalk-plus?rev=b312c6f41dd82a9ac8ea94096fb1d2ff4222c067#b312c6f41dd82a9ac8ea94096fb1d2ff4222c067" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },

@@ -32,14 +32,14 @@ pyopenjtalk.run_frontend(text)        # NJD features (run_marine=False, other op
 
 | Package | Version | Why it matters |
 | --- | --- | --- |
-| `pyopenjtalk-plus[onnxruntime]` | git master [`3310e63`](https://github.com/tsukumijima/pyopenjtalk-plus/commit/3310e63654473ccee5d38c18a6c93129b641bf85) (2026-10-05, version string `0.4.1.post9`) | The frontend itself (dictionary + NJD post-processing). Its `lib/open_jtalk` submodule is [tsukumijima/open_jtalk `f84f40d`](https://github.com/tsukumijima/open_jtalk/commit/f84f40d8eb7510d498f4094ab17b3699c85776bb), the same C sources VOICEVOX CORE builds |
+| `pyopenjtalk-plus[onnxruntime]` | tag `v0.4.1-post10` [`b312c6f`](https://github.com/tsukumijima/pyopenjtalk-plus/commit/b312c6f41dd82a9ac8ea94096fb1d2ff4222c067) (2026-10-21, version string `0.4.1.post10`) | The frontend itself (dictionary + NJD post-processing). Its `lib/open_jtalk` submodule is [tsukumijima/open_jtalk `1e4f83b`](https://github.com/tsukumijima/open_jtalk/commit/1e4f83b08992eaa3638416fd1f386f5f37a9d98c) (2026-10-17) |
 | `sudachipy` | 0.7.0 | `use_sudachi_kanji_yomi=True` (default): homograph readings are re-decided with Sudachi |
 | `sudachidict-core` | 20260723.1 | Same; the Sudachi dictionary content changes readings |
 | `onnxruntime` | 1.30.0 | `predict_nani=True` (default): an ONNX model picks ナニ/ナン for standalone 「何」. Without onnxruntime pyopenjtalk-plus prints a warning and always uses ナニ |
 
-VOICEVOX CORE itself builds tsukumijima/open_jtalk at `fe71dac` (2026-10-07), three number-reading fixes ahead
-of pyopenjtalk-plus' `f84f40d`. The golden corpora don't contain the numbers those fixes change (all 702 rows
-read the same on either), so the golden data stays as generated.
+`1e4f83b` is 53 commits ahead of `fe71dac` (2026-10-07, the open_jtalk CORE built before post10: number
+readings, then a fix that makes dictionary builds read the CSVs in a fixed order). The goldens assume CORE
+builds the same open_jtalk as the pinned pyopenjtalk-plus.
 
 `sudachipy` / `sudachidict-core` are hard dependencies of pyopenjtalk-plus, so
 the Sudachi step is always active with the defaults. `onnxruntime` is only the
@@ -48,8 +48,8 @@ prints the installed versions (including the pyopenjtalk-plus commit and the
 dictionary directory) at the end of every run so a mismatched environment is
 easy to spot.
 
-pyopenjtalk-plus is not taken from PyPI (the 0.4.1.post9 release predates the
-open_jtalk numeral/phone-number/devoicing fixes). uv builds it from source via
+pyopenjtalk-plus is not taken from PyPI, so that the C sources are pinned to
+the exact submodule commits of the tagged revision. uv builds it from source via
 `[tool.uv.sources]` (`git` + `rev`); uv fetches git submodules recursively, so
 `lib/open_jtalk` and `lib/hts_engine_API` are checked out at the commits
 recorded in the pinned revision. Building requires CMake and a C/C++ compiler
@@ -60,12 +60,14 @@ recorded in the pinned revision. Building requires CMake and a C/C++ compiler
 ### System dictionary
 
 The package bundles a **prebuilt** `sys.dic` that upstream commits only at
-release time (last rebuilt for 0.4.1-post9, 2026-08-12), while the dictionary
-CSVs on master have changed since. The goldens are therefore generated with a
-dictionary rebuilt from the CSVs of the pinned commit (`--export-dict`), i.e.
-what upstream's `uv run task build-dictionary` produces. With the bundled
-`sys.dic` instead, 11 rows of `ita.tsv` differ (e.g. 緑化 リョ_クカ vs リョッカ,
-琥珀色 コハ_クショク vs コハクイロ).
+release time. The goldens are generated with a dictionary rebuilt from the CSVs
+of the pinned commit (`--export-dict`), i.e. what upstream's
+`uv run task build-dictionary` produces, plus the fork's own words in
+`extra/*.csv`. For `v0.4.1-post10` (a release commit) the rebuild without the
+extra words is byte-identical to the bundled `sys.dic`
+(MD5 `29a816c28f591d54486224ba57dc0239`), and all 702 golden rows read the same
+with either; the extra words don't occur in the corpora. (At the previous pin
+`3310e63`, a master commit, the bundled `sys.dic` lagged behind its CSVs.)
 
 The exported directory contains:
 
@@ -73,11 +75,14 @@ The exported directory contains:
   `naist-jdic.csv` (pyopenjtalk-plus' maintained naist-jdic),
   `unidic-csj.csv`, `heteronyms.csv`, `fillers.csv`, `rare_syllables.csv`,
   `symbols.csv`, `char.def`, `unk.def`, `matrix.def`, `left-id.def`,
-  `right-id.def`, `pos-id.def`, `rewrite.def`, `feature.def`, `COPYING`.
+  `right-id.def`, `pos-id.def`, `rewrite.def`, `feature.def`, `COPYING`;
+  and `linka-place_names.csv` from `extra/` (see `tools/place-names`).
 - Binaries built by `mecab-dict-index` of the same open_jtalk sources
   (`pyopenjtalk.build_mecab_dictionary()`): `sys.dic`, `matrix.bin`,
   `char.bin`, `unk.dic`. The build is deterministic (same `sys.dic` bytes on
-  every run).
+  every run; since open_jtalk `1e4f83b` also across OSes, as the CSVs are read
+  in a fixed order). With `v0.4.1-post10`: `sys.dic` MD5
+  `aee39ba52a3ddd30deb624800b35c500`.
 
 It is a drop-in replacement for VOICEVOX's `open_jtalk_dic_utf_8-1.11`
 (OpenJTalk's naist-jdic 1.11): `left-id.def`, `right-id.def`, `pos-id.def`,
@@ -112,7 +117,7 @@ Without uv, build pyopenjtalk-plus from a local clone instead:
 
 ```sh
 git clone https://github.com/tsukumijima/pyopenjtalk-plus
-git -C pyopenjtalk-plus checkout 3310e63654473ccee5d38c18a6c93129b641bf85
+git -C pyopenjtalk-plus checkout b312c6f41dd82a9ac8ea94096fb1d2ff4222c067
 git -C pyopenjtalk-plus submodule update --init --recursive
 cd tools/plusfull-golden
 python3 -m venv .venv
@@ -188,6 +193,14 @@ normalized to チュ/バ; `・` between katakana words no longer makes a pause;
 fewer devoiced moras around ツ/チ, e.g. ドクリ_ツシヨオ -> ドクリツシヨオ;
 1877 / 一二歩 numeral readings) and 11 through the rebuilt dictionary.
 
+Bumping the pin from `3310e63` to `v0.4.1-post10` (`b312c6f`) changed 3 of 35
+rows of `conversation.tsv`, 33 of 424 of `ita.tsv` and 30 of 243 of
+`postprocessing.tsv`, about half through the C sources / post-processing and
+half through the dictionary: a trailing 「ない」 phrase is now heiban
+(シラナ'イ -> シラナイ'), 人 / 一 / 下 / 柄 get a devoiced first mora
+(ヒトノ' -> _ヒトノ'), readings such as 高音 タカネ -> コオオン, 放った ホオッタ ->
+ハナッタ, 出生前診断 シュッショオマエシ'ンダン, and number phrases (百兆円 one phrase).
+
 ## License notes
 
 - `corpus/ita.txt` is derived from the
@@ -201,6 +214,7 @@ fewer devoiced moras around ツ/チ, e.g. ドクリ_ツシヨオ -> ドクリツ
 - `corpus/conversation.txt`: short example sentences prepared for this
   comparison (not taken from a third-party corpus).
 - `corpus/postprocessing.txt`: inputs of the post-processing tests of
-  pyopenjtalk-plus (MIT), `tests/test_postprocessing.py` at the pinned commit.
+  pyopenjtalk-plus (MIT), `tests/test_postprocessing.py` at `3310e63` (not
+  refreshed for post10).
 - The golden kana are output of pyopenjtalk-plus (MIT; see its repository for
   the licenses of the bundled dictionary and models) and are test data only.
